@@ -99,6 +99,7 @@ const struct m_sub_options drm_conf = {
         {"drm-osd-plane-id", OPT_REPLACED("drm-draw-plane")},
         {"drm-video-plane-id", OPT_REPLACED("drm-drmprime-video-plane")},
         {"drm-osd-size", OPT_REPLACED("drm-draw-surface-size")},
+        {"drm-hdr-metadata", OPT_CHOICE(hdr_metadata, {"no", 0}, {"auto", 1})},
         {0},
     },
     .defaults = &(const struct drm_opts) {
@@ -106,6 +107,8 @@ const struct m_sub_options drm_conf = {
         .drm_atomic = 1,
         .draw_plane = DRM_OPTS_PRIMARY_PLANE,
         .drmprime_video_plane = DRM_OPTS_OVERLAY_PLANE,
+        .vrr_enabled = 0,
+        .hdr_metadata = 0
     },
     .size = sizeof(struct drm_opts),
 };

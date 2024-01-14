@@ -855,6 +855,9 @@ void pass_color_map(struct gl_shader_cache *sc, bool is_linear,
     mp_get_rgb2xyz_matrix(mp_get_csp_primaries(src.primaries), rgb2xyz);
     gl_sc_uniform_vec3(sc, "src_luma", rgb2xyz[1]);
     mp_get_rgb2xyz_matrix(mp_get_csp_primaries(dst.primaries), rgb2xyz);
+    if (src.hdr.min_luma) {
+        mp_get_rgb2xyz_matrix(src.hdr.prim, rgb2xyz);
+    }
     gl_sc_uniform_vec3(sc, "dst_luma", rgb2xyz[1]);
 
     bool need_ootf = src.light != dst.light;
@@ -888,9 +891,14 @@ void pass_color_map(struct gl_shader_cache *sc, bool is_linear,
     }
 
     // Adapt to the right colorspace if necessary
-    if (src.primaries != dst.primaries) {
-        struct mp_csp_primaries csp_src = mp_get_csp_primaries(src.primaries),
-                                csp_dst = mp_get_csp_primaries(dst.primaries);
+    if ((src.hdr.min_luma && !mp_csp_prim_equal(&src.hdr.prim, &dst.hdr.prim)) ||
+            src.primaries != dst.primaries) {
+        struct mp_csp_primaries csp_src, csp_dst;
+        csp_src = mp_get_csp_primaries(src.primaries);
+        csp_dst = mp_get_csp_primaries(dst.primaries);
+        if (src.hdr.min_luma != 0.0f) {
+             csp_dst = src.hdr.prim;
+        }
         float m[3][3] = {{0}};
         mp_get_cms_matrix(csp_src, csp_dst, MP_INTENT_RELATIVE_COLORIMETRIC, m);
         gl_sc_uniform_mat3(sc, "cms_matrix", true, &m[0][0]);

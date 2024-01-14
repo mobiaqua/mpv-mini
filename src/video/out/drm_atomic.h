@@ -23,6 +23,8 @@
 #include <xf86drm.h>
 #include <xf86drmMode.h>
 
+#include "config.h"
+
 #include "common/msg.h"
 #include "drm_common.h"
 
@@ -96,5 +98,9 @@ bool drm_atomic_restore_old_state(drmModeAtomicReq *request, struct drm_atomic_c
 
 bool drm_mode_ensure_blob(int fd, struct drm_mode *mode);
 bool drm_mode_destroy_blob(int fd, struct drm_mode *mode);
+
+// append HDR blob to the connector properties
+int drm_create_hdr_metadata(struct drm_atomic_context *ctx, struct drm_hdr *hdr_data);
+void drm_destroy_hdr_metadata(struct drm_atomic_context *ctx, struct drm_hdr *hdr_data);
 
 #endif // MP_DRMATOMIC_H
