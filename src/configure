@@ -1,0 +1,797 @@
+#! /bin/sh
+#
+# Original version (C) 2000 Pontscho/fresh!mindworkz
+#                      pontscho@makacs.poliod.hu
+#
+# History / Contributors: Check the Subversion log.
+#
+# Cleanups all over the place (c) 2001 pl
+#
+#
+# This configure script is *not* autoconf-based and has different semantics.
+# It attempts to autodetect all settings and options where possible. It is
+# possible to override autodetection with the --enable-option/--disable-option
+# command line parameters.  --enable-option forces the option on skipping
+# autodetection. Yes, this means that compilation may fail and yes, this is not
+# how autoconf-based configure scripts behave.
+#
+# configure generates a series of configuration files:
+#  - config.h contains #defines that are used in the C code.
+#  - config.mak is included from the Makefiles.
+#
+# If you want to add a new check for $feature, look at the existing checks
+# and try to use helper functions where you can.
+#
+# Furthermore you need to add the variable _feature to the list of default
+# settings and set it to one of yes/no/auto. Also add appropriate
+# --enable-feature/--disable-feature command line options.
+# The results of the check should be written to config.h and config.mak
+# at the end of this script. The variable names used for this should be
+# uniform, i.e. if the option is named 'feature':
+#
+# _feature     : should have a value of yes/no/auto
+# def_feature  : '#define ... 1' or '#undef ...' for conditional compilation
+# ld_feature   : '-L/path/dir -lfeature' GCC options
+#
+#############################################################################
+
+# Prevent locale nonsense from breaking basic text processing utilities
+export LC_ALL=C
+
+# Store the configure line that was used
+configuration="$*"
+
+# utility functions
+tolower() {
+  tr '[A-Z]' '[a-z]'
+}
+
+toupper() {
+  tr '[a-z]' '[A-Z]'
+}
+
+# Prefer these macros to full length text !
+# These macros only return an error code - NO display is done
+compile_check() {
+  source="$1"
+  shift
+  echo >> "$TMPLOG"
+  cat "$source" >> "$TMPLOG"
+  echo >> "$TMPLOG"
+  echo "$_cc $WARNFLAGS $WARN_CFLAGS $CFLAGS $source $extra_cflags $ld_static $extra_ldflags $libs_mpv -o $TMPEXE $@ $libm" >> "$TMPLOG"
+  rm -f "$TMPEXE"
+  $_cc $WARNFLAGS $WARN_CFLAGS $CFLAGS "$source" $extra_cflags $ld_static $extra_ldflags $libs_mpv -o "$TMPEXE" "$@" $libm >> "$TMPLOG" 2>&1
+  TMPRES="$?"
+  echo >> "$TMPLOG"
+  echo >> "$TMPLOG"
+  return "$TMPRES"
+}
+
+cc_check() {
+  compile_check $TMPC $@
+}
+
+cxx_check() {
+  compile_check $TMPCPP $@ -lstdc++
+}
+
+cpp_condition_check() {
+  inc=""
+  if test -n "$1" ; then
+    inc="#include <$1>"
+  fi
+  cat > $TMPC << EOF
+$inc
+#if !($2)
+#error condition not true: $2
+#endif
+int main(void) { return 0; }
+EOF
+  shift 2
+  compile_check $TMPC $@
+}
+
+cflag_check() {
+  cat > $TMPC << EOF
+int main(void) { return 0; }
+EOF
+  compile_check $TMPC $@
+}
+
+header_check() {
+  cat > $TMPC << EOF
+#include <$1>
+int main(void) { return 0; }
+EOF
+  shift
+  compile_check $TMPC $@
+}
+
+return_check() {
+  cat > $TMPC << EOF
+#include <$1>
+int main(void) { return $2; }
+EOF
+  shift 2
+  compile_check $TMPC $@
+}
+
+statement_check() {
+  cat > $TMPC << EOF
+#include <$1>
+int main(void) { $2; return 0; }
+EOF
+  shift
+  shift
+  compile_check $TMPC $@
+}
+
+define_statement_check() {
+  cat > $TMPC << EOF
+#define $1
+#include <$2>
+int main(void) { $3; return 0; }
+EOF
+  shift 3
+  compile_check $TMPC $@
+}
+
+return_statement_check() {
+  cat > $TMPC << EOF
+#include <$1>
+int main(void) { $2; return $3; }
+EOF
+  shift 3
+  compile_check $TMPC $@
+}
+
+inline_asm_check() {
+  cat > $TMPC << EOF
+int main(void) { __asm__ volatile ($1); return 0; }
+EOF
+  shift
+  compile_check $TMPC $@
+}
+
+# The following checks are special and should only be used with broken and
+# non-self-sufficient headers that do not include all of their dependencies.
+
+header_check_broken() {
+  cat > $TMPC << EOF
+#include <$1>
+#include <$2>
+int main(void) { return 0; }
+EOF
+  shift
+  shift
+  compile_check $TMPC $@
+}
+
+statement_check_broken() {
+  cat > $TMPC << EOF
+#include <$1>
+#include <$2>
+int main(void) { $3; return 0; }
+EOF
+  shift 3
+  compile_check $TMPC $@
+}
+
+tmp_run() {
+  "$TMPEXE" >> "$TMPLOG" 2>&1
+}
+
+# Display error message, flush temporary file, exit.
+die () {
+  echo
+  echo "Error: $@" >&2
+  echo >&2
+  rm -f "$TMPEXE" "$TMPC" "$TMPS" "$TMPCPP"
+  echo "Check \"$TMPLOG\" if you do not understand why it failed."
+  exit 1
+}
+
+# OS test booleans functions
+issystem() {
+  test "$(echo $system_name | tolower)" = "$(echo $1 | tolower)"
+}
+linux()     { issystem "Linux"; }
+
+arm() {
+  case "$host_arch" in
+    arm*|aarch64*) return 0;;
+    *) return 1;;
+  esac
+}
+
+# Use this before starting a check
+echocheck() {
+  echo "============ Checking for $@ ============" >> "$TMPLOG"
+  echo ${_echo_n} "Checking for $@ ... ${_echo_c}"
+}
+
+# Use this to echo the results of a check
+echores() {
+  if test "$res_comment" ; then
+    res_comment="($res_comment)"
+  fi
+  echo "Result is: $@ $res_comment" >> "$TMPLOG"
+  echo "##########################################" >> "$TMPLOG"
+  echo "" >> "$TMPLOG"
+  echo "$@ $res_comment"
+  res_comment=""
+}
+#############################################################################
+
+# Check how echo works in this /bin/sh
+case $(echo -n) in
+  -n)   _echo_n=        _echo_c='\c'    ;;      # SysV echo
+  *)    _echo_n='-n '   _echo_c=        ;;      # BSD echo
+esac
+
+show_help(){
+cat << EOF
+Usage: $0 [OPTIONS]...
+
+Configuration:
+  -h, --help             display this help and exit
+
+Installation directories:
+  --prefix=DIR           prefix directory for installation [/usr/local]
+  --bindir=DIR           directory for installing binaries [PREFIX/bin]
+  --datadir=DIR          directory for installing machine independent
+                         data files (skins, etc) [PREFIX/share/mpv]
+  --mandir=DIR           directory for installing man pages [PREFIX/share/man]
+  --confdir=DIR          directory for installing configuration files
+                         [PREFIX/etc/mpv]
+  --libdir=DIR           directory for object code libraries [PREFIX/lib]
+
+Miscellaneous options:
+  --cc=COMPILER          C compiler to build MPV [gcc]
+  --host-cc=COMPILER     C compiler for tools needed while building [gcc]
+  --as=ASSEMBLER         assembler to build MPV [as]
+  --nm=NM                nm tool to build MPV [nm]
+  --ar=AR                librarian to build MPV [ar]
+  --ranlib=RANLIB        ranlib to build MPV [ranlib]
+  --target=PLATFORM      target platform (i386-linux, arm-linux, etc)
+  --with-install=PATH    path to a custom install program
+
+Use these options if autodetection fails:
+  --extra-cflags=FLAGS        extra CFLAGS
+  --extra-ldflags=FLAGS       extra LDFLAGS
+  --extra-libs=FLAGS          extra linker flags
+
+  --with-freetype-config=PATH path to freetype-config
+
+EOF
+exit 0
+} #show_help()
+
+_install=install
+_ranlib=ranlib
+_cc=cc
+_ar=ar
+_arflags=rc
+# create thin archive to save disk space and I/O
+$_ar 2>&1 | grep -q "\[T\] " && _arflags=rcT
+test "$CC" && _cc="$CC"
+_as=auto
+_nm=auto
+_cross_compile=auto
+_prefix="/usr/local"
+_drm=no
+_egldrm=no
+_vaapi=no
+_vaapidrm=no
+_vaapiegl=no
+_gl=no
+_dmabufgl=no
+_drmomap=no
+_drmintel=no
+_omapdce=no
+
+option_value(){
+  echo $(echo $* | cut -d '=' -f 2-)
+}
+
+option_value_uc(){
+  echo $(option_value $1 | toupper)
+}
+
+for ac_option do
+  case "$ac_option" in
+  --help|-help|-h)
+    show_help
+    ;;
+  --prefix=*)
+    _prefix=$(option_value $ac_option)
+    ;;
+  --bindir=*)
+    _bindir=$(option_value $ac_option)
+    ;;
+  --datadir=*)
+    _datadir=$(option_value $ac_option)
+    ;;
+  --mandir=*)
+    _mandir=$(option_value $ac_option)
+    ;;
+  --confdir=*)
+    _confdir=$(option_value $ac_option)
+    ;;
+  --libdir=*)
+    _libdir=$(option_value $ac_option)
+    ;;
+  --codecsdir=*)
+    _codecsdir=$(option_value $ac_option)
+    ;;
+
+  --with-install=*)
+    _install=$(option_value $ac_option)
+    ;;
+
+  --with-freetype-config=*)
+    _freetypeconfig=$(option_value $ac_option)
+    ;;
+
+  --extra-cflags=*)
+    extra_cflags=$(option_value $ac_option)
+    ;;
+  --extra-ldflags=*)
+    extra_ldflags=$(option_value $ac_option)
+    ;;
+  --extra-libs=*)
+    extra_libs=$(option_value $ac_option)
+    ;;
+
+  --target=*)
+    _target=$(option_value $ac_option)
+    ;;
+  --cc=*)
+    _cc=$(option_value $ac_option)
+    ;;
+  --host-cc=*)
+    _host_cc=$(option_value $ac_option)
+    ;;
+  --as=*)
+    _as=$(option_value $ac_option)
+    ;;
+  --nm=*)
+    _nm=$(option_value $ac_option)
+    ;;
+  --ar=*)
+    _ar=$(option_value $ac_option)
+    ;;
+  --ranlib=*)
+    _ranlib=$(option_value $ac_option)
+    ;;
+
+  --drm=*)
+    _drm=$(option_value $ac_option)
+    ;;
+  --egl-drm=*)
+    _egldrm=$(option_value $ac_option)
+    ;;
+  --drm=*)
+    _egldrm=$(option_value $ac_option)
+    ;;
+  --vaapi=*)
+    _vaapi=$(option_value $ac_option)
+    ;;
+  --vaapi-drm=*)
+    _vaapidrm=$(option_value $ac_option)
+    ;;
+  --vaapi-egl=*)
+    _vaapiegl=$(option_value $ac_option)
+    ;;
+  --gl=*)
+    _gl=$(option_value $ac_option)
+    ;;
+  --dmabuf-gl=*)
+    _dmabufgl=$(option_value $ac_option)
+    ;;
+  --drm-omap=*)
+    _drmomap=$(option_value $ac_option)
+    ;;
+  --drm-intel=*)
+    _drmintel=$(option_value $ac_option)
+    ;;
+  --omap-dce=*)
+    _omap-dce=$(option_value $ac_option)
+    ;;
+
+  *)
+    echo "Unknown parameter: $ac_option"
+    exit 1
+    ;;
+
+  esac
+done
+
+# Atmos: moved this here, to be correct, if --prefix is specified
+test -z "$_bindir"  && _bindir="$_prefix/bin"
+test -z "$_datadir" && _datadir="$_prefix/share/mpv"
+test -z "$_mandir"  && _mandir="$_prefix/share/man"
+test -z "$_confdir" && _confdir="$_prefix/etc/mpv"
+test -z "$_libdir"  && _libdir="$_prefix/lib"
+
+for tmpdir in "$TMPDIR" "$TEMPDIR" "/tmp" ; do
+  test "$tmpdir" && break
+done
+
+mpv_tmpdir="$tmpdir/mpv-configure-$RANDOM-$$"
+mkdir $mpv_tmpdir || die "Unable to create tmpdir."
+
+cleanup() {
+  rm -rf "$mpv_tmpdir"
+}
+
+trap cleanup EXIT
+
+TMPLOG="config.log"
+TMPC="$mpv_tmpdir/tmp.c"
+TMPCPP="$mpv_tmpdir/tmp.cpp"
+TMPH="$mpv_tmpdir/tmp.h"
+TMPS="$mpv_tmpdir/tmp.S"
+# We will update this later once we know the executable suffix
+TMPEXE="$mpv_tmpdir/tmp"
+
+rm -f "$TMPLOG"
+echo configuration: $configuration > "$TMPLOG"
+echo >> "$TMPLOG"
+
+
+# Checking CC version...
+  for _cc in "$_cc" gcc cc ; do
+    cc_name_tmp=$($_cc -v 2>&1 | tail -n 1 | cut -d ' ' -f 1)
+    if test "$cc_name_tmp" = "gcc"; then
+      cc_name=$cc_name_tmp
+      echocheck "$_cc version"
+      cc_vendor=gnu
+      cc_version=$($_cc -dumpversion 2>&1)
+      case $cc_version in
+        *)
+          _cc_major=$(echo $cc_version | cut -d '.' -f 1)
+          _cc_minor=$(echo $cc_version | cut -d '.' -f 2)
+          _cc_mini=$(echo $cc_version | cut -d '.' -f 3)
+          ;;
+      esac
+      echores "$cc_version"
+      break
+    fi
+    if $_cc -v 2>&1 | grep -q "clang"; then
+      echocheck "$_cc version"
+      cc_vendor=clang
+      cc_version=$($_cc -dumpversion 2>&1)
+      res_comment="experimental support only"
+      echores "clang $cc_version"
+      break
+    fi
+    cc_name_tmp=$($_cc -V 2>&1 | head -n 1 | cut -d ' ' -f 2,3)
+    if test "$cc_name_tmp" = "Sun C"; then
+      echocheck "$_cc version"
+      cc_vendor=sun
+      cc_version=$($_cc -V 2>&1 | head -n 1 | cut -d ' ' -f 4)
+      res_comment="experimental support only"
+      echores "Sun C $cc_version"
+      break
+    fi
+  done
+test "$cc_fail" = yes && die "unsupported compiler version"
+
+# Determine our OS name and CPU architecture
+if test -z "$_target" ; then
+  # OS name
+  system_name=$(uname -s 2>&1)
+  case "$system_name" in
+  Linux|FreeBSD|NetBSD|OpenBSD|DragonFly|BSD/OS|Darwin|SunOS|QNX|GNU|MorphOS|AIX|AmigaOS|Haiku)
+    ;;
+  *)
+    system_name="$system_name-UNKNOWN"
+    ;;
+  esac
+
+
+  # host's CPU/instruction set
+  set_host_arch() {
+  case "$1" in
+      arm*|zaurus|cats) host_arch=arm ;;
+      *) host_arch=UNKNOWN ;;
+  esac
+  }
+  set_host_arch "$(uname -m 2>&1)"
+  if test "$host_arch" = UNKNOWN ; then
+    set_host_arch "$(uname -p 2>&1)"
+  fi
+else # if test -z "$_target"
+  for component in 3 2; do
+    system_name=$(echo $_target | cut -d '-' -f $component)
+    case "$(echo $system_name | tolower)" in
+      linux) system_name=Linux ;;
+    esac
+  done
+  # We need to convert underscores so that values like k6-2 and pentium-mmx can be passed
+  host_arch=$(echo $_target | cut -d '-' -f 1)
+  if test $(echo $host_arch) != "x86_64" ; then
+    host_arch=$(echo $host_arch | tr '_' '-')
+  fi
+fi
+
+
+echocheck "working compiler"
+cflag_check "" || die "Compiler is not functioning correctly. Check your installation and custom CFLAGS $CFLAGS ."
+echo "yes"
+
+echo "Detected operating system: $system_name"
+echo "Detected host architecture: $host_arch"
+
+echocheck "cross compilation"
+if test $_cross_compile = auto ; then
+  _cross_compile=yes
+  cflag_check "" && "$TMPEXE" 2> /dev/null && _cross_compile=no
+fi
+echores $_cross_compile
+
+if test $_cross_compile = yes; then
+  tmp_run() {
+    return 0
+  }
+  test "$_host_cc" || _host_cc=cc
+fi
+
+echocheck "host cc"
+test "$_host_cc" || _host_cc=$_cc
+echores $_host_cc
+
+cflag_check -MMD -MP && DEPFLAGS="-MMD -MP"
+
+if test $_drm = yes ; then
+    _drm=1
+else
+    _drm=0
+fi
+
+if test $_egldrm = yes ; then
+    _egldrm=1
+else
+    _egldrm=0
+fi
+
+if test $_vaapi = yes ; then
+    _vaapi=1
+else
+    _vaapi=0
+fi
+
+if test $_vaapidrm = yes ; then
+    _vaapidrm=1
+else
+    _vaapidrm=0
+fi
+
+if test $_vaapiegl = yes ; then
+    _vaapiegl=1
+else
+    _vaapiegl=0
+fi
+
+if test $_gl = yes ; then
+    _gl=1
+else
+    _gl=0
+fi
+
+if test $_dmabufgl = yes ; then
+    _dmabufgl=1
+else
+    _dmabufgl=0
+fi
+
+if test $_drmomap = yes ; then
+    _drmomap=1
+else
+    _drmomap=0
+fi
+
+if test $_drmintel = yes ; then
+    _drmintel=1
+else
+    _drmintel=0
+fi
+
+if test $_omapdce = yes ; then
+    _omapdce=1
+else
+    _omapdce=0
+fi
+
+
+HOSTCFLAGS="-D_ISOC99_SOURCE -I. -O2"
+
+#############################################################################
+
+mak_enable () {
+list=$(echo $1 | toupper)
+item=" $(echo $2 | toupper) "
+nprefix=$3;
+for part in $list; do
+  case "$item" in
+    *" $part "*) echo "$name = yes" ;;
+    *) echo "!$name = yes" ;;
+  esac
+done
+}
+
+#############################################################################
+
+echo "Creating config.mak"
+cat > config.mak << EOF
+# -------- Generated by configure -----------
+
+# Ensure that locale settings do not interfere with shell commands.
+export LC_ALL = C
+
+prefix  = \$(DESTDIR)$_prefix
+BINDIR  = \$(DESTDIR)$_bindir
+DATADIR = \$(DESTDIR)$_datadir
+LIBDIR  = \$(DESTDIR)$_libdir
+MANDIR  = \$(DESTDIR)$_mandir
+CONFDIR = \$(DESTDIR)$_confdir
+
+ENABLE_DEBUG = 0
+ENABLE_DRM = $_drm
+ENABLE_DRM_OMAP = $_drmomap
+ENABLE_DRM_INTEL = $_drmintel
+ENABLE_OMAP_DCE = $_omapdce
+ENABLE_VAAPI = $_vaapi
+ENABLE_GL = $_gl
+
+AR      = $_ar
+ARFLAGS = $_arflags
+AS      = $_cc
+CC      = $_cc
+CXX     = $_cc
+HOST_CC = $_host_cc
+INSTALL = $_install
+INSTALLSTRIP = $_install_strip
+
+DCE_INCLUDES = $(SYSROOT)/usr/include/dce
+DRM_INCLUDES = $(SYSROOT)/usr/include/libdrm
+KMS_INCLUDES = $(SYSROOT)/usr/include/libkms
+GBM_INCLUDES = $(SYSROOT)/usr/include/gbm
+OMAP_INCLUDES = $(SYSROOT)/usr/include/omap
+FREETYPE_INCLUDES = $(SYSROOT)/usr/include/freetype2
+FRIBIDI_INCLUDES = $(SYSROOT)/usr/include/fribidi
+HARFBUZZ_INCLUDES = $(SYSROOT)/usr/include/harfbuzz
+
+CFLAGS = -D_ISOC99_SOURCE -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 \
+-Wall -std=c11 -Werror=implicit-function-declaration -Wno-error=deprecated-declarations -Wno-error=unused-function \
+-Wstrict-prototypes -Wno-format-zero-length -Werror=format-security -Wno-redundant-decls -Wvla -Wempty-body \
+-Wno-format-truncation -Wimplicit-fallthrough -fno-math-errno -Wall -Wundef -Wmissing-prototypes -Wshadow -Wno-switch \
+-Wparentheses -Wpointer-arith -Wno-pointer-sign -Wno-unused-result \
+-pthread -I. -I\$(FREETYPE_INCLUDES) -I\$(FRIBIDI_INCLUDES) -I\$(HARFBUZZ_INCLUDES)
+
+ifeq (\$(ENABLE_DRM),1)
+CFLAGS += -I\$(DRM_INCLUDES) -I\$(KMS_INCLUDES)
+endif
+
+ifeq (\$(ENABLE_DRM_OMAP),1)
+CFLAGS += -I\$(OMAP_INCLUDES)
+endif
+
+ifeq (\$(ENABLE_DRM_DCE),1)
+CFLAGS += -I\$(DCE_INCLUDES)
+endif
+
+ifeq (\$(ENABLE_GL),1)
+CFLAGS += -I\$(GBM_INCLUDES)
+endif
+
+ifeq (\$(ENABLE_DEBUG),1)
+CFLAGS += -O0 -g3
+else
+CFLAGS += -O2 -g
+endif
+
+
+EXTRALIBS = -Wl,-z,noexecstack -Wl,-O1 -Wl,--hash-style=gnu -Wl,--as-needed -Wl,-version-script -Wl,mpv.def \
+-lavformat -lavcodec -lavfilter -lavdevice -lswscale -lswresample -lavutil \
+-lasound -lass -llua -lz -lm
+
+ifeq (\$(ENABLE_DRM),1)
+EXTRALIBS += -ldrm
+endif
+
+ifeq (\$(ENABLE_DRM_OMAP),1)
+EXTRALIBS += -ldrm_omap
+endif
+
+ifeq (\$(ENABLE_DRM_INTEL),1)
+EXTRALIBS += -ldrm_intel
+endif
+
+ifeq (\$(ENABLE_OMAP_DCE),1)
+EXTRALIBS += -ldce
+endif
+
+ifeq (\$(ENABLE_GL),1)
+EXTRALIBS += -lEGL -lgbm
+endif
+
+ifeq (\$(ENABLE_VAAPI),1)
+EXTRALIBS += -lva-drm -lva
+endif
+
+ASFLAGS    = \$(CFLAGS)
+AS_DEPFLAGS= $DEPFLAGS
+CC_DEPFLAGS = $DEPFLAGS
+HOSTCC     = \$(HOST_CC)
+HOSTCFLAGS = $HOSTCFLAGS
+HOSTLIBS   = $libm
+AS_O       = -o \$@
+CC_O       = -o \$@
+CXX_O      = -o \$@
+AS_C       = -c
+CC_C       = -c
+CXX_C      = -c
+LD         = gcc
+RANLIB     = $_ranlib
+STRIP      = strip
+
+EOF
+
+#############################################################################
+
+ff_config_enable () {
+list=$(echo $1 | toupper)
+item=" $(echo $2 | toupper) "
+_nprefix=$4;
+_defineprefix=$3;
+_postfix=$5;
+test -z "$_nprefix" && _nprefix='CONFIG'
+for part in $list; do
+  case "$item" in
+    *" $part "*) echo "${_defineprefix}define ${_nprefix}_${part}${_postfix} 1" ;;
+    *) echo "${_defineprefix}define ${_nprefix}_${part}${_postfix} 0" ;;
+  esac
+done
+}
+
+echo "Creating config.h"
+cat > $TMPH << EOF
+/*----------------------------------------------------------------------------
+** This file has been automatically generated by configure any changes in it
+** will be lost when you run configure again.
+** Instead of modifying definitions here, use the --enable/--disable options
+** of the configure script! See ./configure --help for details.
+*---------------------------------------------------------------------------*/
+
+#ifndef CONFIG_H
+#define CONFIG_H
+
+#define PLATFORM "linux"
+#define MPV_CONFDIR "$_confdir"
+#define CONFIGURATION ""
+
+#define HAVE_TA_LEAK_REPORT 0
+#define HAVE_VECTOR 1
+
+#define HAVE_DRM $_drm
+#define HAVE_DRM_OMAP $_drmomap
+#define HAVE_DRM_INTEL $_drmintel
+#define HAVE_EGL_DRM $_egldrm
+#define HAVE_OMAPDCE $_omapdce
+#define HAVE_VAAPI $_vaapi
+#define HAVE_VAAPI_DRM $_vaapidrm
+#define HAVE_VAAPI_EGL $_vaapiegl
+#define HAVE_GL $_gl
+#define HAVE_DMABUF_INTEROP_GL $_dmabufgl
+
+#endif /* CONFIG_H */
+EOF
+
+# Do not overwrite an unchanged config.h to avoid superfluous rebuilds.
+cmp -s "$TMPH" config.h || mv -f "$TMPH" config.h
+
+
+# Last move:
+cleanup
