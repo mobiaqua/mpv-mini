@@ -171,7 +171,7 @@ static const m_option_t mp_vo_opt_list[] = {
         {"display-vdrop", VS_DISP_VDROP},
         {"display-desync", VS_DISP_NONE},
         {"desync", VS_NONE})},
-    {"swapchain-depth", OPT_INT(swapchain_depth), M_RANGE(1, 8)},
+    {"swapchain-depth", OPT_INT(swapchain_depth), M_RANGE(1, VO_MAX_SWAPCHAIN_DEPTH)},
     {0}
 };
 
