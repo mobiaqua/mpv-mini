@@ -20,6 +20,8 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <libavutil/hdr_dynamic_metadata.h>
+#include <libavutil/mastering_display_metadata.h>
 
 #include "options/m_option.h"
 
@@ -30,14 +32,19 @@
 
 enum mp_csp {
     MP_CSP_AUTO,
-    MP_CSP_BT_601,
-    MP_CSP_BT_709,
-    MP_CSP_SMPTE_240M,
-    MP_CSP_BT_2020_NC,
-    MP_CSP_BT_2020_C,
-    MP_CSP_RGB,
-    MP_CSP_XYZ,
-    MP_CSP_YCGCO,
+    // YCbCr-like color systems:
+    MP_CSP_BT_601,      // ITU-R Rec. BT.601 (SD)
+    MP_CSP_BT_709,      // ITU-R Rec. BT.709 (HD)
+    MP_CSP_SMPTE_240M,  // SMPTE-240M
+    MP_CSP_BT_2020_NC,  // ITU-R Rec. BT.2020 (non-constant luminance)
+    MP_CSP_BT_2020_C,   // ITU-R Rec. BT.2020 (constant luminance)
+    MP_CSP_BT_2100_PQ,  // ITU-R Rec. BT.2100 ICtCp PQ variant
+    MP_CSP_BT_2100_HLG, // ITU-R Rec. BT.2100 ICtCp HLG variant
+    MP_CSP_DOLBYVISION, // Dolby Vision (see pl_dovi_metadata)
+    MP_CSP_YCGCO,       // YCgCo (derived from RGB)
+    // Other color systems:
+    MP_CSP_RGB,         // Red, Green and Blue
+    MP_CSP_XYZ,         // Digital Cinema Distribution Master (XYZ)
     MP_CSP_COUNT
 };
 
@@ -54,23 +61,25 @@ extern const struct m_opt_choice_alternatives mp_csp_levels_names[];
 
 enum mp_csp_prim {
     MP_CSP_PRIM_AUTO,
-    MP_CSP_PRIM_BT_601_525,
-    MP_CSP_PRIM_BT_601_625,
-    MP_CSP_PRIM_BT_709,
-    MP_CSP_PRIM_BT_2020,
-    MP_CSP_PRIM_BT_470M,
-    MP_CSP_PRIM_APPLE,
-    MP_CSP_PRIM_ADOBE,
-    MP_CSP_PRIM_PRO_PHOTO,
-    MP_CSP_PRIM_CIE_1931,
-    MP_CSP_PRIM_DCI_P3,
-    MP_CSP_PRIM_DISPLAY_P3,
-    MP_CSP_PRIM_V_GAMUT,
-    MP_CSP_PRIM_S_GAMUT,
-    MP_CSP_PRIM_EBU_3213,
-    MP_CSP_PRIM_FILM_C,
-    MP_CSP_PRIM_ACES_AP0,
-    MP_CSP_PRIM_ACES_AP1,
+    // Standard gamut:
+    MP_CSP_PRIM_BT_601_525,    // ITU-R Rec. BT.601 (525-line = NTSC, SMPTE-C)
+    MP_CSP_PRIM_BT_601_625,    // ITU-R Rec. BT.601 (625-line = PAL, SECAM)
+    MP_CSP_PRIM_BT_709,        // ITU-R Rec. BT.709 (HD), also sRGB
+    MP_CSP_PRIM_BT_470M,       // ITU-R Rec. BT.470 M
+    // Wide gamut:
+    MP_CSP_PRIM_BT_2020,       // ITU-R Rec. BT.2020 (UltraHD)
+    MP_CSP_PRIM_APPLE,         // Apple RGB
+    MP_CSP_PRIM_ADOBE,         // Adobe RGB (1998)
+    MP_CSP_PRIM_PRO_PHOTO,     // ProPhoto RGB (ROMM)
+    MP_CSP_PRIM_CIE_1931,      // CIE 1931 RGB primaries
+    MP_CSP_PRIM_DCI_P3,        // DCI-P3 (Digital Cinema)
+    MP_CSP_PRIM_DISPLAY_P3,    // DCI-P3 (Digital Cinema) with D65 white point
+    MP_CSP_PRIM_V_GAMUT,       // Panasonic V-Gamut (VARICAM)
+    MP_CSP_PRIM_S_GAMUT,       // Sony S-Gamut
+    MP_CSP_PRIM_EBU_3213,      // Traditional film primaries with Illuminant C
+    MP_CSP_PRIM_FILM_C,        // ACES Primaries #0 (ultra wide)
+    MP_CSP_PRIM_ACES_AP0,      // ACES Primaries #0 (ultra wide)
+    MP_CSP_PRIM_ACES_AP1,      // ACES Primaries #1
     MP_CSP_PRIM_COUNT
 };
 
@@ -78,22 +87,24 @@ extern const struct m_opt_choice_alternatives mp_csp_prim_names[];
 
 enum mp_csp_trc {
     MP_CSP_TRC_AUTO,
-    MP_CSP_TRC_BT_1886,
-    MP_CSP_TRC_SRGB,
-    MP_CSP_TRC_LINEAR,
-    MP_CSP_TRC_GAMMA18,
-    MP_CSP_TRC_GAMMA20,
-    MP_CSP_TRC_GAMMA22,
-    MP_CSP_TRC_GAMMA24,
-    MP_CSP_TRC_GAMMA26,
-    MP_CSP_TRC_GAMMA28,
-    MP_CSP_TRC_PRO_PHOTO,
-    MP_CSP_TRC_PQ,
-    MP_CSP_TRC_HLG,
-    MP_CSP_TRC_V_LOG,
-    MP_CSP_TRC_S_LOG1,
-    MP_CSP_TRC_S_LOG2,
-    MP_CSP_TRC_ST428,
+    // Standard dynamic range:
+    MP_CSP_TRC_BT_1886,       // ITU-R Rec. BT.1886 (CRT emulation + OOTF)
+    MP_CSP_TRC_SRGB,          // IEC 61966-2-4 sRGB (CRT emulation)
+    MP_CSP_TRC_LINEAR,        // Linear light content
+    MP_CSP_TRC_GAMMA18,       // Pure power gamma 1.8
+    MP_CSP_TRC_GAMMA20,       // Pure power gamma 2.0
+    MP_CSP_TRC_GAMMA22,       // Pure power gamma 2.2
+    MP_CSP_TRC_GAMMA24,       // Pure power gamma 2.4
+    MP_CSP_TRC_GAMMA26,       // Pure power gamma 2.6
+    MP_CSP_TRC_GAMMA28,       // Pure power gamma 2.8
+    MP_CSP_TRC_PRO_PHOTO,     // ProPhoto RGB (ROMM)
+    MP_CSP_TRC_ST428,         // Digital Cinema Distribution Master (XYZ)
+    // High dynamic range:
+    MP_CSP_TRC_PQ,            // ITU-R BT.2100 PQ (perceptual quantizer), aka SMPTE ST2048
+    MP_CSP_TRC_HLG,           // ITU-R BT.2100 HLG (hybrid log-gamma), aka ARIB STD-B67
+    MP_CSP_TRC_V_LOG,         // Panasonic V-Log (VARICAM)
+    MP_CSP_TRC_S_LOG1,        // Sony S-Log1
+    MP_CSP_TRC_S_LOG2,        // Sony S-Log2
     MP_CSP_TRC_COUNT
 };
 
@@ -183,7 +194,6 @@ struct mp_colorspace {
     enum mp_csp_prim primaries;
     enum mp_csp_trc gamma;
     enum mp_csp_light light;
-    float sig_peak; // highest relative value in signal. 0 = unknown/auto
     struct mp_hdr_metadata hdr;
 };
 
@@ -234,6 +244,16 @@ bool mp_colorspace_equal(struct mp_colorspace c1, struct mp_colorspace c2);
 bool mp_hdr_metadata_equal(const struct mp_hdr_metadata *a,
                            const struct mp_hdr_metadata *b);
 
+void mp_map_hdr_metadata(struct mp_hdr_metadata *out,
+                         const AVMasteringDisplayMetadata *mdm,
+                         const AVContentLightMetadata *clm,
+                         const AVDynamicHDRPlus *dhp);
+
+enum AVColorPrimaries mp_primaries_to_av(enum mp_csp_prim prim);
+enum AVColorTransferCharacteristic mp_transfer_to_av(enum mp_csp_trc trc);
+
+void mp_avframe_set_color(AVFrame *frame, struct mp_colorspace csp);
+
 enum mp_chroma_location {
     MP_CHROMA_AUTO,
     MP_CHROMA_TOPLEFT,  // uhd
@@ -246,8 +266,8 @@ extern const struct m_opt_choice_alternatives mp_chroma_names[];
 
 enum mp_alpha_type {
     MP_ALPHA_AUTO,
-    MP_ALPHA_STRAIGHT,
-    MP_ALPHA_PREMUL,
+    MP_ALPHA_STRAIGHT,   // alpha channel is separate from the video
+    MP_ALPHA_PREMUL,     // alpha channel is multiplied into the colors
 };
 
 extern const struct m_opt_choice_alternatives mp_alpha_names[];

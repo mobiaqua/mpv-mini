@@ -189,11 +189,136 @@ void mp_colorspace_merge(struct mp_colorspace *orig, struct mp_colorspace *new)
         orig->primaries = new->primaries;
     if (!orig->gamma)
         orig->gamma = new->gamma;
-    if (!orig->sig_peak)
-        orig->sig_peak = new->sig_peak;
     if (!orig->light)
         orig->light = new->light;
     mp_hdr_metadata_merge(&orig->hdr, &new->hdr);
+}
+
+void mp_map_hdr_metadata(struct mp_hdr_metadata *out,
+                         const AVMasteringDisplayMetadata *mdm,
+                         const AVContentLightMetadata *clm,
+                         const AVDynamicHDRPlus *dhp)
+{
+    if (mdm) {
+        if (mdm->has_luminance) {
+            out->max_luma = av_q2d(mdm->max_luminance);
+            out->min_luma = av_q2d(mdm->min_luminance);
+            if (out->max_luma < 10.0 || out->min_luma >= out->max_luma)
+                out->max_luma = out->min_luma = 0; /* sanity */
+        }
+        if (mdm->has_primaries) {
+            out->prim = (struct mp_csp_primaries) {
+                .red.x   = av_q2d(mdm->display_primaries[0][0]),
+                .red.y   = av_q2d(mdm->display_primaries[0][1]),
+                .green.x = av_q2d(mdm->display_primaries[1][0]),
+                .green.y = av_q2d(mdm->display_primaries[1][1]),
+                .blue.x  = av_q2d(mdm->display_primaries[2][0]),
+                .blue.y  = av_q2d(mdm->display_primaries[2][1]),
+                .white.x = av_q2d(mdm->white_point[0]),
+                .white.y = av_q2d(mdm->white_point[1]),
+            };
+        }
+    }
+
+    if (clm) {
+        out->max_cll = clm->MaxCLL;
+        out->max_fall = clm->MaxFALL;
+    }
+
+    if (dhp && dhp->application_version < 2) {
+        float hist_max = 0;
+        const AVHDRPlusColorTransformParams *pars = &dhp->params[0];
+        assert(dhp->num_windows > 0);
+        out->scene_max[0] = 10000 * av_q2d(pars->maxscl[0]);
+        out->scene_max[1] = 10000 * av_q2d(pars->maxscl[1]);
+        out->scene_max[2] = 10000 * av_q2d(pars->maxscl[2]);
+        out->scene_avg = 10000 * av_q2d(pars->average_maxrgb);
+        // Calculate largest value from histogram to use as fallback for clips
+        // with missing MaxSCL information. Note that this may end up picking
+        // the "reserved" value at the 5% percentile, which in practice appears
+        // to track the brightest pixel in the scene.
+        for (int i = 0; i < pars->num_distribution_maxrgb_percentiles; i++) {
+            float hist_val = av_q2d(pars->distribution_maxrgb[i].percentile);
+            if (hist_val > hist_max)
+                hist_max = hist_val;
+        }
+        hist_max *= 10000;
+        if (!out->scene_max[0])
+            out->scene_max[0] = hist_max;
+        if (!out->scene_max[1])
+            out->scene_max[1] = hist_max;
+        if (!out->scene_max[2])
+            out->scene_max[2] = hist_max;
+
+        if (pars->tone_mapping_flag == 1) {
+            out->ootf.target_luma = av_q2d(dhp->targeted_system_display_maximum_luminance);
+            out->ootf.knee_x = av_q2d(pars->knee_point_x);
+            out->ootf.knee_y = av_q2d(pars->knee_point_y);
+            assert(pars->num_bezier_curve_anchors < 16);
+            for (int i = 0; i < pars->num_bezier_curve_anchors; i++)
+                out->ootf.anchors[i] = av_q2d(pars->bezier_curve_anchors[i]);
+            out->ootf.num_anchors = pars->num_bezier_curve_anchors;
+        }
+    }
+}
+
+void mp_avframe_set_color(AVFrame *frame, struct mp_colorspace csp)
+{
+    const AVFrameSideData *sd;
+    (void) sd;
+
+    frame->color_primaries = mp_csp_prim_to_avcol_pri(csp.primaries);
+    frame->color_trc = mp_csp_trc_to_avcol_trc(csp.gamma);
+
+    if (csp.hdr.max_cll) {
+        sd = av_frame_get_side_data(frame, AV_FRAME_DATA_CONTENT_LIGHT_LEVEL);
+        if (!sd) {
+            sd = av_frame_new_side_data(frame, AV_FRAME_DATA_CONTENT_LIGHT_LEVEL,
+                                        sizeof(AVContentLightMetadata));
+        }
+
+        if (sd) {
+            AVContentLightMetadata *clm = (AVContentLightMetadata *) sd->data;
+            *clm = (AVContentLightMetadata) {
+                .MaxCLL = csp.hdr.max_cll,
+                .MaxFALL = csp.hdr.max_fall,
+            };
+        }
+    }
+
+    if (csp.hdr.max_luma || csp.hdr.prim.red.x) {
+        sd = av_frame_get_side_data(frame, AV_FRAME_DATA_MASTERING_DISPLAY_METADATA);
+        if (!sd) {
+            sd = av_frame_new_side_data(frame, AV_FRAME_DATA_MASTERING_DISPLAY_METADATA,
+                                        sizeof(AVMasteringDisplayMetadata));
+        }
+
+        if (sd) {
+            AVMasteringDisplayMetadata *mdm = (AVMasteringDisplayMetadata *) sd->data;
+            *mdm = (AVMasteringDisplayMetadata) {
+                .max_luminance = av_d2q(csp.hdr.max_luma, 1000000),
+                .min_luminance = av_d2q(csp.hdr.min_luma, 1000000),
+                .has_luminance = !!csp.hdr.max_luma,
+                .display_primaries = {
+                    {
+                        av_d2q(csp.hdr.prim.red.x, 1000000),
+                        av_d2q(csp.hdr.prim.red.y, 1000000),
+                    }, {
+                        av_d2q(csp.hdr.prim.green.x, 1000000),
+                        av_d2q(csp.hdr.prim.green.y, 1000000),
+                    }, {
+                        av_d2q(csp.hdr.prim.blue.x, 1000000),
+                        av_d2q(csp.hdr.prim.blue.y, 1000000),
+                    }
+                },
+                .white_point = {
+                    av_d2q(csp.hdr.prim.white.x, 1000000),
+                    av_d2q(csp.hdr.prim.white.y, 1000000),
+                },
+                .has_primaries = !!csp.hdr.prim.red.x,
+            };
+        }
+    }
 }
 
 // The short name _must_ match with what vf_stereo3d accepts (if supported).
@@ -1000,7 +1125,6 @@ bool mp_colorspace_equal(struct mp_colorspace c1, struct mp_colorspace c2)
            c1.primaries == c2.primaries &&
            c1.gamma == c2.gamma &&
            c1.light == c2.light &&
-           c1.sig_peak == c2.sig_peak &&
            mp_hdr_metadata_equal(&c1.hdr, &c2.hdr);
 }
 
