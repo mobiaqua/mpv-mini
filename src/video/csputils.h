@@ -139,6 +139,44 @@ extern const struct m_opt_choice_alternatives mp_stereo3d_names[];
 #define MP_STEREO3D_NAME_DEF(x, def) \
     (MP_STEREO3D_NAME(x) ? MP_STEREO3D_NAME(x) : (def))
 
+extern const struct mp_hdr_metadata mp_hdr_metadata_empty; // equal to {0}
+extern const struct mp_hdr_metadata mp_hdr_metadata_hdr10; // generic HDR10 display
+
+struct mp_csp_col_xy {
+    float x, y;
+};
+
+struct mp_csp_primaries {
+    struct mp_csp_col_xy red, green, blue, white;
+};
+
+struct mp_hdr_bezier {
+    float target_luma;      // target luminance (cd/m²) for this OOTF
+    float knee_x, knee_y;   // cross-over knee point (0-1)
+    float anchors[15];      // intermediate bezier curve control points (0-1)
+    int num_anchors;
+};
+
+struct mp_hdr_metadata {
+    // --- MP_HDR_METADATA_HDR10
+    // Mastering display metadata.
+    struct mp_csp_primaries prim;   // mastering display primaries
+    float min_luma, max_luma;       // min/max luminance (in cd/m²)
+
+    // Content light level. (Note: this is ignored by libplacebo itself)
+    float max_cll;                  // max content light level (in cd/m²)
+    float max_fall;                 // max frame average light level (in cd/m²)
+
+    // --- MP_HDR_METADATA_HDR10PLUS
+    float scene_max[3];             // maxSCL in cd/m² per component (RGB)
+    float scene_avg;                // average of maxRGB in cd/m²
+    struct mp_hdr_bezier ootf;      // reference OOTF (optional)
+
+    // --- MP_HDR_METADATA_CIE_Y
+    float max_pq_y;                 // maximum PQ luminance (in PQ, 0-1)
+    float avg_pq_y;                 // averaged PQ luminance (in PQ, 0-1)
+};
+
 struct mp_colorspace {
     enum mp_csp space;
     enum mp_csp_levels levels;
@@ -146,6 +184,7 @@ struct mp_colorspace {
     enum mp_csp_trc gamma;
     enum mp_csp_light light;
     float sig_peak; // highest relative value in signal. 0 = unknown/auto
+    struct mp_hdr_metadata hdr;
 };
 
 // For many colorspace conversions, in particular those involving HDR, an
@@ -158,6 +197,9 @@ struct mp_colorspace {
 
 // Replaces unknown values in the first struct by those of the second struct
 void mp_colorspace_merge(struct mp_colorspace *orig, struct mp_colorspace *new);
+
+void mp_hdr_metadata_merge(struct mp_hdr_metadata *orig,
+                           const struct mp_hdr_metadata *update);
 
 struct mp_csp_params {
     struct mp_colorspace color; // input colorspace
@@ -189,6 +231,9 @@ void mp_csp_set_image_params(struct mp_csp_params *params,
 
 bool mp_colorspace_equal(struct mp_colorspace c1, struct mp_colorspace c2);
 
+bool mp_hdr_metadata_equal(const struct mp_hdr_metadata *a,
+                           const struct mp_hdr_metadata *b);
+
 enum mp_chroma_location {
     MP_CHROMA_AUTO,
     MP_CHROMA_TOPLEFT,  // uhd
@@ -216,9 +261,11 @@ bool mp_csp_equalizer_state_changed(struct mp_csp_equalizer_state *state);
 void mp_csp_equalizer_state_get(struct mp_csp_equalizer_state *state,
                                 struct mp_csp_params *params);
 
-struct mp_csp_col_xy {
-    float x, y;
-};
+static inline bool mp_xy_equal(const struct mp_csp_col_xy *a,
+                               const struct mp_csp_col_xy *b)
+{
+    return a->x == b->x && a->y == b->y;
+}
 
 static inline float mp_xy_X(struct mp_csp_col_xy xy) {
     return xy.x / xy.y;
@@ -227,10 +274,6 @@ static inline float mp_xy_X(struct mp_csp_col_xy xy) {
 static inline float mp_xy_Z(struct mp_csp_col_xy xy) {
     return (1 - xy.x - xy.y) / xy.y;
 }
-
-struct mp_csp_primaries {
-    struct mp_csp_col_xy red, green, blue, white;
-};
 
 enum mp_csp avcol_spc_to_mp_csp(int avcolorspace);
 enum mp_csp_levels avcol_range_to_mp_csp_levels(int avrange);
@@ -244,6 +287,10 @@ int mp_csp_trc_to_avcol_trc(enum mp_csp_trc trc);
 
 enum mp_csp mp_csp_guess_colorspace(int width, int height);
 enum mp_csp_prim mp_csp_guess_primaries(int width, int height);
+void mp_csp_prim_merge(struct mp_csp_primaries *orig,
+                       const struct mp_csp_primaries *update);
+bool mp_csp_prim_equal(const struct mp_csp_primaries *a,
+                       const struct mp_csp_primaries *b);
 
 enum mp_chroma_location avchroma_location_to_mp(int avloc);
 int mp_chroma_location_to_av(enum mp_chroma_location mploc);

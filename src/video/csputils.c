@@ -119,6 +119,66 @@ const struct m_opt_choice_alternatives mp_alpha_names[] = {
     {0}
 };
 
+const struct mp_hdr_metadata mp_hdr_metadata_empty = {0};
+const struct mp_hdr_metadata mp_hdr_metadata_hdr10 = {
+    .prim = {
+        .red   = {0.708,    0.292},
+        .green = {0.170,    0.797},
+        .blue  = {0.131,    0.046},
+        .white = {0.31271,  0.32902},
+    },
+    .min_luma = 0,
+    .max_luma = 10000,
+    .max_cll  = 10000,
+    .max_fall = 0, // unknown
+};
+
+bool mp_csp_prim_equal(const struct mp_csp_primaries *a,
+                       const struct mp_csp_primaries *b)
+{
+    return mp_xy_equal(&a->red,   &b->red)   &&
+           mp_xy_equal(&a->green, &b->green) &&
+           mp_xy_equal(&a->blue,  &b->blue)  &&
+           mp_xy_equal(&a->white, &b->white);
+}
+
+void mp_csp_prim_merge(struct mp_csp_primaries *orig,
+                       const struct mp_csp_primaries *update)
+{
+    union {
+        struct mp_csp_primaries prim;
+        float raw[8];
+    } *pa = (void *) orig,
+      *pb = (void *) update;
+
+    for (int i = 0; i < MP_ARRAY_SIZE(pa->raw); i++)
+        pa->raw[i] = pa->raw[i] ? pa->raw[i] : pb->raw[i];
+}
+
+void mp_hdr_metadata_merge(struct mp_hdr_metadata *orig,
+                           const struct mp_hdr_metadata *update)
+{
+    mp_csp_prim_merge(&orig->prim, &update->prim);
+    if (!orig->min_luma)
+        orig->min_luma = update->min_luma;
+    if (!orig->max_luma)
+        orig->max_luma = update->max_luma;
+    if (!orig->max_cll)
+        orig->max_cll = update->max_cll;
+    if (!orig->max_fall)
+        orig->max_fall = update->max_fall;
+    if (!orig->scene_max[1])
+        memcpy(orig->scene_max, update->scene_max, sizeof(orig->scene_max));
+    if (!orig->scene_avg)
+        orig->scene_avg = update->scene_avg;
+    if (!orig->ootf.target_luma)
+        orig->ootf = update->ootf;
+    if (!orig->max_pq_y)
+        orig->max_pq_y = update->max_pq_y;
+    if (!orig->avg_pq_y)
+        orig->avg_pq_y = update->avg_pq_y;
+}
+
 void mp_colorspace_merge(struct mp_colorspace *orig, struct mp_colorspace *new)
 {
     if (!orig->space)
@@ -133,6 +193,7 @@ void mp_colorspace_merge(struct mp_colorspace *orig, struct mp_colorspace *new)
         orig->sig_peak = new->sig_peak;
     if (!orig->light)
         orig->light = new->light;
+    mp_hdr_metadata_merge(&orig->hdr, &new->hdr);
 }
 
 // The short name _must_ match with what vf_stereo3d accepts (if supported).
@@ -905,6 +966,33 @@ void mp_csp_set_image_params(struct mp_csp_params *params,
     params->color = p.color;
 }
 
+static inline bool mp_hdr_bezier_equal(const struct mp_hdr_bezier *a,
+                                       const struct mp_hdr_bezier *b)
+{
+    return a->target_luma == b->target_luma &&
+           a->knee_x      == b->knee_x &&
+           a->knee_y      == b->knee_y &&
+           a->num_anchors == b->num_anchors &&
+           !memcmp(a->anchors, b->anchors, sizeof(a->anchors[0]) * a->num_anchors);
+}
+
+bool mp_hdr_metadata_equal(const struct mp_hdr_metadata *a,
+                           const struct mp_hdr_metadata *b)
+{
+    return mp_csp_prim_equal(&a->prim, &b->prim) &&
+           a->min_luma == b->min_luma &&
+           a->max_luma == b->max_luma &&
+           a->max_cll  == b->max_cll  &&
+           a->max_fall == b->max_fall &&
+           a->scene_max[0] == b->scene_max[0] &&
+           a->scene_max[1] == b->scene_max[1] &&
+           a->scene_max[2] == b->scene_max[2] &&
+           a->scene_avg == b->scene_avg &&
+           mp_hdr_bezier_equal(&a->ootf, &b->ootf) &&
+           a->max_pq_y == b->max_pq_y &&
+           a->avg_pq_y == b->avg_pq_y;
+}
+
 bool mp_colorspace_equal(struct mp_colorspace c1, struct mp_colorspace c2)
 {
     return c1.space == c2.space &&
@@ -912,7 +1000,8 @@ bool mp_colorspace_equal(struct mp_colorspace c1, struct mp_colorspace c2)
            c1.primaries == c2.primaries &&
            c1.gamma == c2.gamma &&
            c1.light == c2.light &&
-           c1.sig_peak == c2.sig_peak;
+           c1.sig_peak == c2.sig_peak &&
+           mp_hdr_metadata_equal(&c1.hdr, &c2.hdr);
 }
 
 enum mp_csp_equalizer_param {
