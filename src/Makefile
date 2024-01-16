@@ -135,6 +135,7 @@ SRCS_COMMON = \
     video/out/dither.c \
     video/out/dr_helper.c \
     video/out/filter_kernels.c \
+    video/out/present_sync.c \
     video/out/gpu/context.c \
     video/out/gpu/error_diffusion.c \
     video/out/gpu/hwdec.c \

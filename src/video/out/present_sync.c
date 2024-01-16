@@ -99,12 +99,11 @@ void present_sync_swap(struct mp_present *present)
         cur->vsync_duration = ust_passed / msc_passed;
 
     struct timespec ts;
-    if (clock_gettime(CLOCK_MONOTONIC, &ts)) {
+    if (clock_gettime(CLOCK_MONOTONIC, &ts))
         return;
-    }
 
-    uint64_t now_monotonic = ts.tv_sec * 1000000LL + ts.tv_nsec / 1000;
-    uint64_t ust_mp_time = mp_time_us() - (now_monotonic - ust);
+    int64_t now_monotonic = ts.tv_sec * 1000000LL + ts.tv_nsec / 1000;
+    int64_t ust_mp_time = mp_time_us() - (now_monotonic - ust);
     cur->queue_display_time = ust_mp_time;
 }
 
