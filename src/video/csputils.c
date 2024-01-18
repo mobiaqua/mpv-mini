@@ -203,7 +203,7 @@ void mp_map_hdr_metadata(struct mp_hdr_metadata *out,
         if (mdm->has_luminance) {
             out->max_luma = av_q2d(mdm->max_luminance);
             out->min_luma = av_q2d(mdm->min_luminance);
-            if (out->max_luma < 10.0 || out->min_luma >= out->max_luma)
+            if (out->max_luma < 5.0 || out->min_luma >= out->max_luma)
                 out->max_luma = out->min_luma = 0; /* sanity */
         }
         if (mdm->has_primaries) {
