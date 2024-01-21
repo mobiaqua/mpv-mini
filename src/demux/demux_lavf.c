@@ -53,6 +53,7 @@
 #include "options/m_config.h"
 #include "options/m_option.h"
 #include "options/path.h"
+#include "player/core.h"
 
 #ifndef AV_DISPOSITION_TIMED_THUMBNAILS
 #define AV_DISPOSITION_TIMED_THUMBNAILS 0
@@ -781,6 +782,12 @@ static void handle_new_stream(demuxer_t *demuxer, int i)
 
         // This also applies to vfw-muxed mkv, but we can't detect these easily.
         sh->codec->avi_dts = matches_avinputformat_name(priv, "avi");
+
+        g_mpctx->is_4k = sh->codec->disp_w > 1920;
+        g_mpctx->is_2398 = sh->codec->fps < 23.99;
+        g_mpctx->is_24 = (sh->codec->fps >= 24.0 && sh->codec->fps < 24.99);
+        g_mpctx->is_25 = (sh->codec->fps >= 25.0 && sh->codec->fps < 25.99);
+        g_mpctx->is_30 = (sh->codec->fps >= 26.0 && sh->codec->fps < 30.99);
 
         break;
     }

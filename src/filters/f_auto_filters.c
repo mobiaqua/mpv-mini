@@ -17,6 +17,7 @@
 #include "filter.h"
 #include "filter_internal.h"
 #include "user_filters.h"
+#include "player/core.h"
 
 struct deint_priv {
     struct mp_subfilter sub;
@@ -417,6 +418,70 @@ struct mp_filter *mp_autoaspeed_create(struct mp_filter *parent)
     struct aspeed_priv *p = f->priv;
     p->cur_speed = 1.0;
     p->cur_speed_drop = 1.0;
+
+    p->sub.in = mp_filter_add_pin(f, MP_PIN_IN, "in");
+    p->sub.out = mp_filter_add_pin(f, MP_PIN_OUT, "out");
+
+    return f;
+}
+
+struct ac3encode_priv {
+    struct mp_subfilter sub;
+};
+
+static void ac3encode_process(struct mp_filter *f)
+{
+    struct ac3encode_priv *p = f->priv;
+
+    if (!mp_subfilter_read(&p->sub))
+        return;
+
+    if (!p->sub.filter) {
+        if (g_mpctx->is_dts) {
+            MP_VERBOSE(f, "adding lavcac3enc\n");
+            p->sub.filter = mp_create_user_filter(f, MP_OUTPUT_CHAIN_AUDIO, "lavcac3enc", NULL);
+        }
+    }
+
+    mp_subfilter_continue(&p->sub);
+}
+
+static bool ac3encode_command(struct mp_filter *f, struct mp_filter_command *cmd)
+{
+    return false;
+}
+
+static void ac3encode_reset(struct mp_filter *f)
+{
+    struct ac3encode_priv *p = f->priv;
+
+    mp_subfilter_reset(&p->sub);
+}
+
+static void ac3encode_destroy(struct mp_filter *f)
+{
+    struct ac3encode_priv *p = f->priv;
+
+    mp_subfilter_reset(&p->sub);
+    TA_FREEP(&p->sub.filter);
+}
+
+static const struct mp_filter_info ac3encode_filter = {
+    .name = "ac3encode",
+    .priv_size = sizeof(struct ac3encode_priv),
+    .command = ac3encode_command,
+    .process = ac3encode_process,
+    .reset = ac3encode_reset,
+    .destroy = ac3encode_destroy,
+};
+
+struct mp_filter *mp_ac3encode_create(struct mp_filter *parent)
+{
+    struct mp_filter *f = mp_filter_create(parent, &ac3encode_filter);
+    if (!f)
+        return NULL;
+
+    struct ac3encode_priv *p = f->priv;
 
     p->sub.in = mp_filter_add_pin(f, MP_PIN_IN, "in");
     p->sub.out = mp_filter_add_pin(f, MP_PIN_OUT, "out");

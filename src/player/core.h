@@ -455,7 +455,17 @@ typedef struct MPContext {
     //     to true.
     struct demuxer *open_res_demuxer;
     int open_res_error;
+
+    bool is_4k;
+    bool is_2398;
+    bool is_24;
+    bool is_25;
+    bool is_30;
+    bool is_hdr;
+    bool is_dts;
 } MPContext;
+
+extern struct MPContext *g_mpctx;
 
 // Contains information about an asynchronous work item, how it can be aborted,
 // and when. All fields are protected by MPContext.abort_lock.

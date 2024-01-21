@@ -53,6 +53,7 @@
 #include "ebml.h"
 #include "matroska.h"
 #include "codec_tags.h"
+#include "player/core.h"
 
 #include "common/msg.h"
 
@@ -1506,6 +1507,12 @@ static int demux_mkv_open_video(demuxer_t *demuxer, mkv_track_t *track)
     sh_v->stereo_mode = track->stereo_mode;
     sh_v->color = track->color;
 
+    g_mpctx->is_4k = sh_v->disp_w > 1920;
+    g_mpctx->is_2398 = sh_v->fps < 23.99;
+    g_mpctx->is_24 = (sh_v->fps >= 24.0 && sh_v->fps < 24.99);
+    g_mpctx->is_25 = (sh_v->fps >= 25.0 && sh_v->fps < 25.99);
+    g_mpctx->is_30 = (sh_v->fps >= 26.0 && sh_v->fps < 30.99);
+
 done:
     demux_add_sh_stream(demuxer, sh);
 
@@ -1826,6 +1833,9 @@ static int demux_mkv_open_audio(demuxer_t *demuxer, mkv_track_t *track)
     // start decoding from anywhere.
     if (strcmp(codec, "truehd") != 0)
         track->require_keyframes = true;
+
+    if (strcmp(codec, "dts") == 0)
+        g_mpctx->is_dts = true;
 
     sh_a->extradata = extradata;
     sh_a->extradata_size = extradata_len;

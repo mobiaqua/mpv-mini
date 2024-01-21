@@ -645,6 +645,13 @@ static void create_audio_things(struct chain *p)
     if (!f->f)
         abort();
     MP_TARRAY_APPEND(p, p->post_filters, p->num_post_filters, f);
+
+    f = create_wrapper_filter(p);
+    f->name = "ac3encode";
+    f->f = mp_ac3encode_create(f->wrapper);
+    if (!f->f)
+        abort();
+    MP_TARRAY_APPEND(p, p->post_filters, p->num_post_filters, f);
 }
 
 struct mp_output_chain *mp_output_chain_create(struct mp_filter *parent,

@@ -95,6 +95,7 @@ const char mp_help_text[] =
 
 static pthread_mutex_t terminal_owner_lock = PTHREAD_MUTEX_INITIALIZER;
 static struct MPContext *terminal_owner;
+struct MPContext *g_mpctx;
 
 static bool cas_terminal_owner(struct MPContext *old, struct MPContext *new)
 {
@@ -401,6 +402,7 @@ int mpv_main(int argc, char *argv[])
     struct MPContext *mpctx = mp_create();
     if (!mpctx)
         return 1;
+    g_mpctx = mpctx;
 
     mpctx->is_cli = true;
 

@@ -42,6 +42,7 @@
 #include "osdep/timer.h"
 #include "present_sync.h"
 #include "video/out/vo.h"
+#include "player/core.h"
 
 #define EVT_RELEASE 1
 #define EVT_ACQUIRE 2
@@ -662,14 +663,43 @@ static bool setup_mode(struct vo_drm_state *drm)
         goto err;
     }
 
+    parsed.type = DRM_MODE_SPEC_BY_NUMBERS;
+    if (g_mpctx->is_4k) {
+        parsed.width = 3840;
+        parsed.height = 2160;
+    } else {
+        parsed.width = 1920;
+        parsed.height = 1080;
+    }
+    parsed.refresh = 60.00;
+    if (g_mpctx->is_2398)
+        parsed.refresh = 23.98;
+    if (g_mpctx->is_24)
+        parsed.refresh = 24.00;
+    if (g_mpctx->is_25)
+        parsed.refresh = 25.00;
+    if (g_mpctx->is_30)
+        parsed.refresh = 30.00;
+
     switch (parsed.type) {
     case DRM_MODE_SPEC_BY_IDX:
         if (!setup_mode_by_idx(drm, parsed.idx))
             goto err;
         break;
     case DRM_MODE_SPEC_BY_NUMBERS:
-        if (!setup_mode_by_numbers(drm, parsed.width, parsed.height, parsed.refresh))
+        if (!setup_mode_by_numbers(drm, parsed.width, parsed.height, parsed.refresh)) {
             goto err;
+        } else {
+            if (g_mpctx->is_4k) {
+                drm->opts->hdr_metadata = 1;
+                drm->opts->drm_format = DRM_OPTS_FORMAT_XRGB2101010;
+                g_mpctx->is_hdr = true;
+            }
+            break;
+        }
+        if (!setup_mode_preferred(drm)) {
+            goto err;
+        }
         break;
     case DRM_MODE_SPEC_PREFERRED:
         if (!setup_mode_preferred(drm))

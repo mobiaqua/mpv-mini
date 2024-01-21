@@ -11,3 +11,6 @@ struct mp_filter *mp_autorotate_create(struct mp_filter *parent);
 
 // Insert a filter that inserts scaletempo2 depending on speed settings.
 struct mp_filter *mp_autoaspeed_create(struct mp_filter *parent);
+
+// Insert a filter that inserts ac3 encode depending on audio codec
+struct mp_filter *mp_ac3encode_create(struct mp_filter *parent);

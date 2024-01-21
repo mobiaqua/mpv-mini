@@ -44,6 +44,7 @@
 #include "video/out/aspect.h"
 #include "video/out/dither.h"
 #include "video/out/vo.h"
+#include "player/core.h"
 
 // scale/cscale arguments that map directly to shader filter routines.
 // Note that the convolution filters are not included in this list.
@@ -4060,6 +4061,10 @@ struct gl_video *gl_video_init(struct ra *ra, struct mp_log *log,
         .dim_m = 1,
         .offset = 0,
     });
+    if (g_mpctx->is_hdr) {
+        opts->target_trc = MP_CSP_TRC_PQ;
+        opts->target_prim = MP_CSP_PRIM_BT_2020;
+    }
     init_gl(p);
     reinit_from_options(p);
     return p;
