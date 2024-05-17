@@ -1365,6 +1365,8 @@ void mp_input_load_config(struct input_ctx *ictx)
         talloc_free(tmp);
     }
 
+    mp_input_remote_controller_add(ictx);
+
     input_unlock(ictx);
 }
 

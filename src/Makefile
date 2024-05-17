@@ -66,6 +66,7 @@ SRCS_COMMON = \
     input/ipc.c \
     input/keycodes.c \
     input/ipc-unix.c \
+    input/remote_controller.c \
     misc/bstr.c \
     misc/charset_conv.c \
     misc/dispatch.c \
