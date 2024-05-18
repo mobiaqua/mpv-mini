@@ -92,7 +92,8 @@ const struct m_sub_options drm_conf = {
             {"xrgb8888",    DRM_OPTS_FORMAT_XRGB8888},
             {"xrgb2101010", DRM_OPTS_FORMAT_XRGB2101010},
             {"xbgr8888",    DRM_OPTS_FORMAT_XBGR8888},
-            {"xbgr2101010", DRM_OPTS_FORMAT_XBGR2101010})},
+            {"xbgr2101010", DRM_OPTS_FORMAT_XBGR2101010},
+            {"yuyv",        DRM_OPTS_FORMAT_YUYV})},
         {"drm-draw-surface-size", OPT_SIZE_BOX(draw_surface_size)},
         {"drm-vrr-enabled", OPT_CHOICE(vrr_enabled,
             {"no", 0}, {"yes", 1}, {"auto", -1})},
@@ -108,6 +109,7 @@ const struct m_sub_options drm_conf = {
         .drm_atomic = 1,
         .draw_plane = DRM_OPTS_PRIMARY_PLANE,
         .drmprime_video_plane = DRM_OPTS_OVERLAY_PLANE,
+        .drm_format = DRM_OPTS_FORMAT_XRGB8888,
         .vrr_enabled = 0,
         .hdr_metadata = 0
     },
