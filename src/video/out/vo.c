@@ -72,7 +72,9 @@ extern const struct vo_driver video_out_kitty;
 static const struct vo_driver *const video_out_drivers[] =
 {
     &video_out_libmpv,
+#if HAVE_GL
     &video_out_gpu,
+#endif
 #if HAVE_DRM
     &video_out_drm,
 #endif
