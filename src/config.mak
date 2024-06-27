@@ -2,7 +2,6 @@
 ENABLE_DEBUG = 1
 ENABLE_DRM = 1
 ENABLE_DRM_OMAP = 0
-ENABLE_DRM_INTEL = 0
 ENABLE_OMAP_DCE = 0
 ENABLE_VAAPI = 1
 ENABLE_GL = 1
@@ -13,9 +12,7 @@ CC      = $(CROSS_COMPILE)gcc $(CPU_FLAGS) --sysroot=$(SYSROOT)
 
 DCE_INCLUDES = $(SYSROOT)/usr/include/dce
 DRM_INCLUDES = $(SYSROOT)/usr/include/libdrm
-KMS_INCLUDES = $(SYSROOT)/usr/include/libkms
 GBM_INCLUDES = $(SYSROOT)/usr/include/gbm
-OMAP_INCLUDES = $(SYSROOT)/usr/include/omap
 FREETYPE_INCLUDES = $(SYSROOT)/usr/include/freetype2
 FRIBIDI_INCLUDES = $(SYSROOT)/usr/include/fribidi
 HARFBUZZ_INCLUDES = $(SYSROOT)/usr/include/harfbuzz
@@ -28,11 +25,7 @@ CFLAGS = -D_ISOC99_SOURCE -D_GNU_SOURCE -D_FILE_OFFSET_BITS=64 \
 -pthread -I. -I$(FREETYPE_INCLUDES) -I$(FRIBIDI_INCLUDES) -I$(HARFBUZZ_INCLUDES)
 
 ifeq ($(ENABLE_DRM),1)
-CFLAGS += -I$(DRM_INCLUDES) -I$(KMS_INCLUDES)
-endif
-
-ifeq ($(ENABLE_DRM_OMAP),1)
-CFLAGS += -I$(OMAP_INCLUDES)
+CFLAGS += -I$(DRM_INCLUDES)
 endif
 
 ifeq ($(ENABLE_DRM_DCE),1)
@@ -56,14 +49,6 @@ EXTRALIBS = -Wl,-z,noexecstack -Wl,-O1 -Wl,--hash-style=gnu -Wl,--as-needed -Wl,
 
 ifeq ($(ENABLE_DRM),1)
 EXTRALIBS += -ldrm
-endif
-
-ifeq ($(ENABLE_DRM_OMAP),1)
-EXTRALIBS += -ldrm_omap
-endif
-
-ifeq ($(ENABLE_DRM_INTEL),1)
-EXTRALIBS += -ldrm_intel
 endif
 
 ifeq ($(ENABLE_OMAP_DCE),1)
