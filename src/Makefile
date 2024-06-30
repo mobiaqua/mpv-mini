@@ -210,8 +210,9 @@ ifeq ($(ENABLE_VAAPI),1)
     video/out/hwdec/hwdec_vaapi.c
 endif
 
-ifeq ($(ENABLE_OMAP_DRM),1)
-    SRCS_COMMON +=
+ifeq ($(ENABLE_DRM_OMAP),1)
+    SRCS_COMMON += \
+    video/out/vo_drm_omap.c
 endif
 
 ifeq ($(ENABLE_OMAP_DCE),1)
