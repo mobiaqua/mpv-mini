@@ -613,7 +613,6 @@ static bool setup_mode_by_numbers(struct vo_drm_state *drm,
         }
     }
 
-    MP_ERR(drm, "Could not find mode matching %s\n", drm->opts->mode_spec);
     return false;
 }
 
@@ -690,7 +689,10 @@ static bool setup_mode(struct vo_drm_state *drm)
         break;
     case DRM_MODE_SPEC_BY_NUMBERS:
         if (!setup_mode_by_numbers(drm, parsed.width, parsed.height, parsed.refresh)) {
-            goto err;
+            // no TV Hz modes, try use monitor 60hz
+            if (setup_mode_by_numbers(drm, parsed.width, parsed.height, 60.00)) {
+                break;
+            }
         } else {
             if (g_mpctx->is_4k) {
                 drm->opts->hdr_metadata = 1;
