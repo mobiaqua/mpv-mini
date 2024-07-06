@@ -1394,6 +1394,29 @@ static const char *const mkv_video_tags[][2] = {
     {0}
 };
 
+static const uint32_t mkv_video_fourcc_tags[][1] = {
+    {MKTAG('m', 'j', 'p', 'g')},
+    {MKTAG('m', 'p', 'g', '1')},
+    {MKTAG('m', 'p', 'g', '2')},
+    {MKTAG('m', 'p', '4', 'v')},
+    {MKTAG('m', 'p', '4', 'v')},
+    {MKTAG('m', 'p', '4', 'v')},
+    {MKTAG('h', '2', '6', '4')},
+    {MKTAG('m', 'p', '4', '3')},
+    {MKTAG('t', 'h', 'e', 'o')},
+    {MKTAG('v', 'p', '8', '0')},
+    {MKTAG('v', 'p', '9', '0')},
+    {MKTAG('d', 'r', 'a', 'c')},
+    {MKTAG('a', 'p', 'c', 'h')},
+    {MKTAG('h', '2', '6', '5')},
+    {MKTAG('s', 'n', 'o', 'w')},
+    {MKTAG('a', 'v', '0', '1')},
+    {MKTAG('p', 'n', 'g', '1')},
+    {MKTAG('a', 's', 'v', '2')},
+    {MKTAG('a', 's', 'v', '3')},
+    {0}
+};
+
 static int demux_mkv_open_video(demuxer_t *demuxer, mkv_track_t *track)
 {
     unsigned char *extradata = NULL;
@@ -1466,6 +1489,7 @@ static int demux_mkv_open_video(demuxer_t *demuxer, mkv_track_t *track)
         for (int i = 0; mkv_video_tags[i][0]; i++) {
             if (!strcmp(mkv_video_tags[i][0], track->codec_id)) {
                 sh_v->codec = mkv_video_tags[i][1];
+                sh_v->codec_tag = mkv_video_fourcc_tags[i][0];
                 break;
             }
         }

@@ -789,6 +789,8 @@ static void handle_new_stream(demuxer_t *demuxer, int i)
         g_mpctx->is_25 = (sh->codec->fps >= 25.0 && sh->codec->fps < 25.99);
         g_mpctx->is_30 = (sh->codec->fps >= 26.0 && sh->codec->fps < 30.99);
 
+        sh->codec->level = codec->level;
+
         break;
     }
     case AVMEDIA_TYPE_SUBTITLE: {
