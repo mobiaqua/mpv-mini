@@ -107,6 +107,7 @@ struct mp_decoder_fns {
 };
 
 extern const struct mp_decoder_fns vd_lavc;
+extern const struct mp_decoder_fns vd_omap_dce;
 extern const struct mp_decoder_fns ad_lavc;
 extern const struct mp_decoder_fns ad_spdif;
 
@@ -119,6 +120,9 @@ struct lavc_state {
 void lavc_process(struct mp_filter *f, struct lavc_state *state,
                   int (*send)(struct mp_filter *f, struct demux_packet *pkt),
                   int (*receive)(struct mp_filter *f, struct mp_frame *res));
+
+// vd_omap_dce.c
+struct mp_decoder_list *select_omap_dce_codec(const char *codec, const char *pref);
 
 // ad_spdif.c
 struct mp_decoder_list *select_spdif_codec(const char *codec, const char *pref);

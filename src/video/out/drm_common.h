@@ -43,6 +43,10 @@ struct framebuffer {
     uint32_t handle;
     uint8_t *map;
     uint32_t id;
+    bool locked;
+    bool free;
+    int index;
+    int ref_count;
 };
 
 struct drm_mode {

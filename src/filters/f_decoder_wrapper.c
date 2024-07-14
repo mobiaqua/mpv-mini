@@ -409,6 +409,19 @@ static bool reinit_decoder(struct priv *p)
         driver = &vd_lavc;
         user_list = p->opts->video_decoders;
         fallback = "h264";
+
+#if HAVE_OMAP_DCE
+        if (p->codec->codec) {
+            struct mp_decoder_list *omap_dce =
+                select_omap_dce_codec(p->codec->codec, NULL);
+            if (omap_dce->num_entries) {
+                driver = &vd_omap_dce;
+                list = omap_dce;
+            } else {
+                talloc_free(omap_dce);
+            }
+        }
+#endif
     } else if (p->codec->type == STREAM_AUDIO) {
         driver = &ad_lavc;
         user_list = p->opts->audio_decoders;

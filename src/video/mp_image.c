@@ -329,7 +329,7 @@ struct mp_image *mp_image_new_ref(struct mp_image *img)
     if (!img)
         return NULL;
 
-    if (!img->bufs[0])
+    if (!img->bufs[0] && !img->hw_surf)
         return mp_image_new_copy(img);
 
     struct mp_image *new = talloc_ptrtype(NULL, new);

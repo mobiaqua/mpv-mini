@@ -29,6 +29,7 @@
 
 #include <libavformat/avformat.h>
 #include <libavformat/avio.h>
+#include <libavcodec/bsf.h>
 #include <libavutil/avutil.h>
 #include <libavutil/avstring.h>
 #include <libavutil/mathematics.h>
@@ -257,6 +258,9 @@ typedef struct lavf_priv {
     int retry_counter;
 
     AVDictionary *av_opts;
+    AVBSFContext *bsf_handle;
+
+    bool first_frame;
 
     // Proxying nested streams.
     struct nested_stream *nested;
@@ -784,12 +788,78 @@ static void handle_new_stream(demuxer_t *demuxer, int i)
         sh->codec->avi_dts = matches_avinputformat_name(priv, "avi");
 
         g_mpctx->is_4k = sh->codec->disp_w > 1920;
+#if !HAVE_OMAP_DCE
         g_mpctx->is_2398 = sh->codec->fps < 23.99;
         g_mpctx->is_24 = (sh->codec->fps >= 24.0 && sh->codec->fps < 24.99);
         g_mpctx->is_25 = (sh->codec->fps >= 25.0 && sh->codec->fps < 25.99);
         g_mpctx->is_30 = (sh->codec->fps >= 26.0 && sh->codec->fps < 30.99);
+#endif
 
-        sh->codec->level = codec->level;
+        sh->codec->level = (codec->level == -99) ? 0 : codec->level;
+
+        const AVCodec *avc = avcodec_find_decoder(codec->codec_id);
+        AVCodecContext *codec_ctx = avcodec_alloc_context3(avc);
+        if (avcodec_parameters_to_context(codec_ctx, codec) < 0) {
+            MP_ERR(demuxer, "Error copy codec paramters\n");
+            avcodec_free_context(&codec_ctx);
+            codec_ctx = NULL;
+        }
+        if (codec_ctx && codec->codec_id == AV_CODEC_ID_H264) {
+            if (codec->extradata && codec->extradata_size > 0 && codec->extradata[0] == 1) {
+                if (!priv->bsf_handle) {
+                    const AVBitStreamFilter *bsf = av_bsf_get_by_name("h264_mp4toannexb");
+                    if (bsf) {
+                        if (av_bsf_alloc(bsf, &priv->bsf_handle) >= 0) {
+                            if (avcodec_parameters_from_context(priv->bsf_handle->par_in, codec_ctx) >= 0) {
+                                if (av_bsf_init(priv->bsf_handle) < 0) {
+                                    MP_ERR(demuxer, "Error init bsf\n");
+                                    av_bsf_free(&priv->bsf_handle);
+                                    priv->bsf_handle = NULL;
+                                }
+                            } else {
+                                MP_ERR(demuxer, "Error copy bsf paramters\n");
+                                av_bsf_free(&priv->bsf_handle);
+                                priv->bsf_handle = NULL;
+                            }
+                        } else {
+                            MP_ERR(demuxer, "Error alloc bsf filter\n");
+                        }
+                    } else {
+                        MP_ERR(demuxer, "Error finding h264_mp4toannexb filter\n");
+                    }
+                }
+                if (!priv->bsf_handle)
+                    MP_ERR(demuxer, "Error enable h264_mp4toannexb filter\n");
+            }
+        }
+        if (codec_ctx && codec->codec_id == AV_CODEC_ID_MPEG4) {
+            if (!priv->bsf_handle) {
+                const AVBitStreamFilter *bsf = av_bsf_get_by_name("mpeg4_unpack_bframes");
+                if (bsf) {
+                    if (av_bsf_alloc(bsf, &priv->bsf_handle) >= 0) {
+                        if (avcodec_parameters_from_context(priv->bsf_handle->par_in, codec_ctx) >= 0) {
+                            if (av_bsf_init(priv->bsf_handle) < 0) {
+                                MP_ERR(demuxer, "Error init bsf\n");
+                                av_bsf_free(&priv->bsf_handle);
+                                priv->bsf_handle = NULL;
+                            }
+                        } else {
+                            MP_ERR(demuxer, "Error copy bsf paramters\n");
+                            av_bsf_free(&priv->bsf_handle);
+                            priv->bsf_handle = NULL;
+                        }
+                    } else {
+                        MP_ERR(demuxer, "Error alloc bsf filter\n");
+                    }
+                } else {
+                    MP_ERR(demuxer, "Error finding h264_mp4toannexb filter\n");
+                }
+            }
+            if (!priv->bsf_handle)
+                MP_ERR(demuxer, "Error enable h264_mp4toannexb filter\n");
+        }
+        if (codec_ctx)
+            avcodec_free_context(&codec_ctx);
 
         break;
     }
@@ -839,6 +909,7 @@ static void handle_new_stream(demuxer_t *demuxer, int i)
         sh->ff_index = st->index;
         sh->codec->codec = mp_codec_from_av_codec_id(codec->codec_id);
         sh->codec->codec_tag = codec->codec_tag;
+        sh->codec->codec_id = codec->codec_id;
         sh->codec->lav_codecpar = avcodec_parameters_alloc();
         if (sh->codec->lav_codecpar)
             avcodec_parameters_copy(sh->codec->lav_codecpar, codec);
@@ -1126,6 +1197,8 @@ static int demux_open_lavf(demuxer_t *demuxer, enum demux_check check)
     mp_avdict_print_unset(demuxer->log, MSGL_V, dopts);
     av_dict_free(&dopts);
 
+    priv->first_frame = true;
+
     priv->avfc = avfc;
 
     bool probeinfo = lavfdopts->probeinfo != 0;
@@ -1262,7 +1335,39 @@ static bool demux_lavf_read_packet(struct demuxer *demux,
         return true; // don't signal EOF if skipping a packet
     }
 
-    struct demux_packet *dp = new_demux_packet_from_avpacket(pkt);
+    if ((info->sh->type == STREAM_VIDEO) && priv->bsf_handle) {
+        if (av_bsf_send_packet(priv->bsf_handle, pkt) < 0) {
+            av_packet_unref(pkt);
+            return false;
+        }
+        if (av_bsf_receive_packet(priv->bsf_handle, pkt) < 0) {
+            av_packet_unref(pkt);
+            return false;
+        }
+    }
+
+    struct demux_packet *dp;
+    if (info->sh->type == STREAM_VIDEO &&
+        info->sh->codec->codec_id == AV_CODEC_ID_WMV3 &&
+        info->sh->codec->lav_codecpar->extradata &&
+        info->sh->codec->lav_codecpar->extradata_size > 0 &&
+        priv->first_frame) {
+        dp = new_demux_packet(pkt->size + 36);
+        unsigned int *ptr = (unsigned int *)dp->buffer;
+        ptr[0] = 0xc5ffffff;
+        ptr[1] = 4;
+        ptr[2] = (1 << 24) | *(unsigned int *)info->sh->codec->lav_codecpar->extradata;
+        ptr[3] = info->sh->codec->disp_h;
+        ptr[4] = info->sh->codec->disp_w;
+        ptr[5] = 0xc;
+        ptr[6] = 0;
+        ptr[7] = 0;
+        ptr[8] = 0;
+        memcpy(dp->buffer + 36, pkt->data, pkt->size);
+        priv->first_frame = false;
+    } else {
+        dp = new_demux_packet_from_avpacket(pkt);
+    }
     if (!dp) {
         av_packet_unref(pkt);
         return true;
@@ -1440,6 +1545,10 @@ static void demux_close_lavf(demuxer_t *demuxer)
             free_stream(priv->stream);
         if (priv->av_opts)
             av_dict_free(&priv->av_opts);
+        if (priv->bsf_handle) {
+            av_bsf_free(&priv->bsf_handle);
+            priv->bsf_handle = NULL;
+        }
         talloc_free(priv);
         demuxer->priv = NULL;
     }

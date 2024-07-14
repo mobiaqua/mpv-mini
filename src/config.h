@@ -5,7 +5,9 @@
 #define HAVE_VECTOR 1
 #define HAVE_DRM 1
 #define HAVE_DRM_OMAP 0
+#define HAVE_DRM_INTEL 0
 #define HAVE_EGL_DRM 1
+#define HAVE_OMAP_DCE 0
 #define HAVE_VAAPI 1
 #define HAVE_VAAPI_DRM 1
 #define HAVE_VAAPI_EGL 1

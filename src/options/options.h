@@ -336,6 +336,9 @@ typedef struct MPOpts {
     struct stream_opts *stream_opts;
 
     struct vd_lavc_params *vd_lavc_params;
+#if HAVE_OMAP_DCE
+    struct vd_omap_dce_params *vd_omap_dce_params;
+#endif
     struct ad_lavc_params *ad_lavc_params;
 
     struct input_opts *input_opts;

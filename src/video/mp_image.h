@@ -71,6 +71,7 @@ struct mp_image_params {
  *   image data. mp_image_make_writeable() will do that copy if required.
  */
 typedef struct mp_image {
+    int x0, y0, x1, y1;
     int w, h;  // visible dimensions (redundant with params.w/h)
 
     struct mp_image_params params;
@@ -94,6 +95,7 @@ typedef struct mp_image {
     double nominal_fps;
     /* for private use */
     void* priv;
+    bool hw_surf;
 
     // Reference-counted data references.
     // These do not necessarily map directly to planes[]. They can have

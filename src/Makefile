@@ -216,7 +216,8 @@ ifeq ($(ENABLE_DRM_OMAP),1)
 endif
 
 ifeq ($(ENABLE_OMAP_DCE),1)
-    SRCS_COMMON +=
+    SRCS_COMMON += \
+    video/decode/vd_omap_dce.c
 endif
 
 COMMON_LIBS                   += $(COMMON_LIBS-yes)

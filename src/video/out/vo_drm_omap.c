@@ -64,7 +64,7 @@ struct priv {
     int buf_count;
 };
 
-static void destroy_framebuffer(int fd, struct framebuffer *fb)
+static void destroy_framebuffer(struct framebuffer *fb)
 {
     if (!fb)
         return;
@@ -74,7 +74,7 @@ static void destroy_framebuffer(int fd, struct framebuffer *fb)
     }
 
     if (fb->id) {
-        drmModeRmFB(fd, fb->id);
+        drmModeRmFB(fb->fd, fb->id);
     }
 
     if (fb->dma_buf) {
@@ -85,7 +85,7 @@ static void destroy_framebuffer(int fd, struct framebuffer *fb)
         struct drm_mode_destroy_dumb dreq = {
             .handle = fb->handle,
         };
-        drmIoctl(fd, DRM_IOCTL_MODE_DESTROY_DUMB, &dreq);
+        drmIoctl(fb->fd, DRM_IOCTL_MODE_DESTROY_DUMB, &dreq);
     }
 }
 
@@ -187,7 +187,7 @@ static struct framebuffer *setup_framebuffer(struct vo *vo, int width, int heigh
     return fb;
 
 err:
-    destroy_framebuffer(drm->fd, fb);
+    destroy_framebuffer(fb);
     return NULL;
 }
 
@@ -226,69 +226,24 @@ static int reconfig(struct vo *vo, struct mp_image_params *params)
     talloc_free(p->last_input);
     p->last_input = NULL;
 
-    if (mp_sws_reinit(p->sws) < 0)
-        return -1;
-
-    p->buf_count = vo->opts->swapchain_depth + 1;
-    p->bufs = talloc_zero_array(p, struct framebuffer *, p->buf_count);
-
-    for (int i = 0; i < p->buf_count; i++) {
-        if (p->bufs[i]) {
-            destroy_framebuffer(drm->fd, p->bufs[i]);
-        }
-        p->bufs[i] = setup_framebuffer(vo, mp_rect_w(p->src), mp_rect_h(p->src), IMGFMT_NV12);
-        if (!p->bufs[i])
+    if (!vo->hwdec) {
+        if (mp_sws_reinit(p->sws) < 0)
             return -1;
+        p->buf_count = vo->opts->swapchain_depth + 1;
+        if (!p->bufs)
+            p->bufs = talloc_zero_array(p, struct framebuffer *, p->buf_count);
+
+        for (int i = 0; i < p->buf_count; i++) {
+            if (p->bufs[i])
+                destroy_framebuffer(p->bufs[i]);
+            p->bufs[i] = setup_framebuffer(vo, mp_rect_w(p->src), mp_rect_h(p->src), IMGFMT_NV12);
+            if (!p->bufs[i])
+                return -1;
+        }
     }
 
     vo->want_redraw = true;
     return 0;
-}
-
-static struct framebuffer *get_new_fb(struct vo *vo)
-{
-    struct priv *p = vo->priv;
-
-    p->front_buf++;
-    p->front_buf %= p->buf_count;
-
-    return p->bufs[p->front_buf];
-}
-
-static void draw_image(struct vo *vo, mp_image_t *mpi, struct framebuffer *buf)
-{
-    struct priv *p = vo->priv;
-    struct vo_drm_state *drm = vo->drm;
-
-    if (drm->active && buf != NULL) {
-        if (mpi) {
-            struct mp_image src = *mpi;
-            struct mp_rect src_rc = p->src;
-            src_rc.x0 = MP_ALIGN_DOWN(src_rc.x0, mpi->fmt.align_x);
-            src_rc.y0 = MP_ALIGN_DOWN(src_rc.y0, mpi->fmt.align_y);
-            mp_image_crop_rc(&src, src_rc);
-
-            mp_sws_scale(p->sws, p->cur_frame_cropped, &src);
-            //osd_draw_on_image(vo->osd, p->osd, src.pts, 0, p->cur_frame);
-        } else {
-            mp_image_clear(p->cur_frame, 0, 0, p->cur_frame->w, p->cur_frame->h);
-            //osd_draw_on_image(vo->osd, p->osd, 0, 0, p->cur_frame);
-        }
-
-        memcpy_pic(buf->map, p->cur_frame->planes[0],
-                   p->cur_frame->w, p->cur_frame->h,
-                   buf->stride,
-                   p->cur_frame->stride[0]);
-        memcpy_pic(buf->map + buf->width * buf->height, p->cur_frame->planes[1],
-                   p->cur_frame->w, p->cur_frame->h / 2,
-                   buf->stride,
-                   p->cur_frame->stride[1]);
-    }
-
-    if (mpi != p->last_input) {
-        talloc_free(p->last_input);
-        p->last_input = mpi;
-    }
 }
 
 static void enqueue_frame(struct vo *vo, struct framebuffer *fb)
@@ -297,6 +252,9 @@ static void enqueue_frame(struct vo *vo, struct framebuffer *fb)
 
     struct drm_frame *new_frame = talloc(p, struct drm_frame);
     new_frame->fb = fb;
+    if (vo->hwdec) {
+        fb->ref_count++;
+    }
     MP_TARRAY_APPEND(p, p->fb_queue, p->fb_queue_len, new_frame);
 }
 
@@ -304,6 +262,11 @@ static void dequeue_frame(struct vo *vo)
 {
     struct priv *p = vo->priv;
 
+    if (vo->hwdec) {
+        if (--p->fb_queue[0]->fb->ref_count == 0) {
+            p->fb_queue[0]->fb->locked = false;
+        }
+    }
     talloc_free(p->fb_queue[0]);
     MP_TARRAY_REMOVE_AT(p->fb_queue, p->fb_queue_len, 0);
 }
@@ -321,18 +284,56 @@ static void draw_frame(struct vo *vo, struct vo_frame *frame)
 {
     struct vo_drm_state *drm = vo->drm;
     struct priv *p = vo->priv;
+    struct framebuffer *fb;
 
     if (!drm->active)
         return;
 
     drm->still = frame->still;
 
-    // we redraw the entire image when OSD needs to be redrawn
-    struct framebuffer *fb =  p->bufs[p->front_buf];
-    const bool repeat = frame->repeat && !frame->redraw;
-    if (!repeat) {
-        fb = get_new_fb(vo);
-        draw_image(vo, mp_image_new_ref(frame->current), fb);
+    if (vo->hwdec) {
+        fb = frame->current->priv;
+        p->src.x0 = frame->current->x0;
+        p->src.y0 = frame->current->y0;
+        p->src.x1 = frame->current->x1;
+        p->src.y1 = frame->current->y1;
+    } else {
+        const bool repeat = frame->repeat && !frame->redraw;
+        // we redraw the entire image when OSD needs to be redrawn
+        fb = p->bufs[p->front_buf];
+        if (!repeat) {
+            p->front_buf++;
+            p->front_buf %= p->buf_count;
+            fb = p->bufs[p->front_buf];
+            mp_image_t *mpi = mp_image_new_ref(frame->current);
+            if (mpi) {
+                struct mp_image src = *mpi;
+                struct mp_rect src_rc = p->src;
+                src_rc.x0 = MP_ALIGN_DOWN(src_rc.x0, mpi->fmt.align_x);
+                src_rc.y0 = MP_ALIGN_DOWN(src_rc.y0, mpi->fmt.align_y);
+                mp_image_crop_rc(&src, src_rc);
+
+                mp_sws_scale(p->sws, p->cur_frame_cropped, &src);
+                //osd_draw_on_image(vo->osd, p->osd, src.pts, 0, p->cur_frame);
+            } else {
+                mp_image_clear(p->cur_frame, 0, 0, p->cur_frame->w, p->cur_frame->h);
+                //osd_draw_on_image(vo->osd, p->osd, 0, 0, p->cur_frame);
+            }
+
+            memcpy_pic(fb->map, p->cur_frame->planes[0],
+                       p->cur_frame->w, p->cur_frame->h,
+                       fb->stride,
+                       p->cur_frame->stride[0]);
+            memcpy_pic(fb->map + fb->width * fb->height, p->cur_frame->planes[1],
+                       p->cur_frame->w, p->cur_frame->h / 2,
+                       fb->stride,
+                       p->cur_frame->stride[1]);
+
+            if (mpi != p->last_input) {
+                talloc_free(p->last_input);
+                p->last_input = mpi;
+            }
+        }
     }
 
     enqueue_frame(vo, fb);
@@ -344,9 +345,35 @@ static void queue_flip(struct vo *vo, struct drm_frame *frame)
     struct priv *p = vo->priv;
     struct drm_atomic_context *atomic_ctx = drm->atomic_context;
 
+    int src_w = p->src.x1 - p->src.x0;
+    int src_h = p->src.y1 - p->src.y0;
+    int dst_x = p->dst.x0;
+    int dst_y = p->dst.y0;
+    int dst_w = p->dst.x1 - p->dst.x0;
+    int dst_h = p->dst.y1 - p->dst.y0;
+
+    // Anisotropic video hack
+    if (src_w == 720 && (src_h == 288 || src_h == 240)) {
+        dst_x = 0;
+        dst_y = 0;
+        dst_w = drm->fb->width;
+        dst_h = drm->fb->height;
+    }
+
+    // specific video hack
+    if (src_w == 1920 && src_h == 540) {
+        dst_y = 0;
+        dst_h *= 2;
+    }
     drmModeSetPlane(drm->fd, atomic_ctx->drmprime_video_plane->id, drm->crtc_id, frame->fb->id, 0,
-                    p->dst.x0, p->dst.y0, p->dst.x1 - p->dst.x0, p->dst.y1 - p->dst.y0,
-                    p->src.x0 << 16, p->src.y0 << 16, p->src.x1 << 16, p->src.y1 << 16);
+                    MP_ALIGN_DOWN(dst_x, 2),
+                    MP_ALIGN_DOWN(dst_y, 2),
+                    MP_ALIGN_DOWN(dst_w ,2),
+                    MP_ALIGN_DOWN(dst_h, 2),
+                    p->src.x0 << 16,
+                    p->src.y0 << 16,
+                    src_w << 16,
+                    src_h << 16);
 
     int ret = drmModePageFlip(drm->fd, drm->crtc_id,
                               drm->fb->id, DRM_MODE_PAGE_FLIP_EVENT, drm);
@@ -386,18 +413,33 @@ static void get_vsync(struct vo *vo, struct vo_vsync_info *info)
     present_sync_get_info(drm->present, info);
 }
 
+static struct framebuffer *alloc_buffer(struct vo *vo, int imgfmt, int w, int h)
+{
+    return setup_framebuffer(vo, w, h, imgfmt);
+}
+
+static void release_buffer(struct vo *vo, struct framebuffer *buffer)
+{
+    if (buffer) {
+        destroy_framebuffer(buffer);
+    }
+}
+
 static void uninit(struct vo *vo)
 {
     struct priv *p = vo->priv;
-    struct vo_drm_state *drm = vo->drm;
 
-    for (int i = 0; i < p->buf_count; i++) {
-        if (p->bufs[i]) {
-            destroy_framebuffer(drm->fd, p->bufs[i]);
+    if (!vo->hwdec && p->bufs) {
+        for (int i = 0; i < p->buf_count; i++) {
+            if (p->bufs[i]) {
+                destroy_framebuffer(p->bufs[i]);
+            }
         }
+        talloc_free(p->bufs);
     }
     if (p->primary_buf) {
-        destroy_framebuffer(drm->fd, p->primary_buf);
+        destroy_framebuffer(p->primary_buf);
+        talloc_free(p->primary_buf);
     }
 
     vo_drm_uninit(vo);
@@ -466,9 +508,11 @@ static int preinit(struct vo *vo)
     drmModeAtomicFree(request);
 
     vo_drm_set_monitor_par(vo);
-    p->sws = mp_sws_alloc(vo);
-    p->sws->log = vo->log;
-    mp_sws_enable_cmdline_opts(p->sws, vo->global);
+    if (!vo->hwdec) {
+        p->sws = mp_sws_alloc(vo);
+        p->sws->log = vo->log;
+        mp_sws_enable_cmdline_opts(p->sws, vo->global);
+    }
     return 0;
 
 err:
@@ -484,11 +528,22 @@ static int query_format(struct vo *vo, int format)
 
 static int control(struct vo *vo, uint32_t request, void *arg)
 {
+    struct priv *p = vo->priv;
+
     switch (request) {
     case VOCTRL_SET_PANSCAN:
         if (vo->config_ok)
             reconfig(vo, vo->params);
         return VO_TRUE;
+    case VOCTRL_RESET:
+        while (p->fb_queue_len > 0) {
+            swapchain_step(vo);
+        }
+        return VO_TRUE;
+    case VOCTRL_CHECK_EVENTS:
+        break;
+    default:
+        break;
     }
 
     int events = 0;
@@ -504,6 +559,8 @@ const struct vo_driver video_out_drm_omap = {
     .query_format = query_format,
     .reconfig = reconfig,
     .control = control,
+    .alloc_buffer = alloc_buffer,
+    .release_buffer = release_buffer,
     .draw_frame = draw_frame,
     .flip_page = flip_page,
     .get_vsync = get_vsync,

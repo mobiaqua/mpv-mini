@@ -2606,6 +2606,11 @@ static void mkv_parse_and_add_packet(demuxer_t *demuxer, mkv_track_t *track,
                 new->dts = track->av_parser->dts == AV_NOPTS_VALUE
                          ? MP_NOPTS_VALUE : track->av_parser->dts / tb;
             }
+
+            if (stream->type == STREAM_VIDEO) {
+                // TODO annex B
+            }
+
             add_packet(demuxer, stream, new);
         }
         pts = dts = AV_NOPTS_VALUE;

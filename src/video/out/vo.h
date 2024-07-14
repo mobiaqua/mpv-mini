@@ -382,6 +382,10 @@ struct vo_driver {
     struct mp_image *(*get_image_ts)(struct vo *vo, int imgfmt, int w, int h,
                                      int stride_align, int flags);
 
+    struct framebuffer *(*alloc_buffer)(struct vo *vo, int imgfmt, int w, int h);
+
+    void (*release_buffer)(struct vo *vo, struct framebuffer *buffer);
+
     /*
      * Render the given frame to the VO's backbuffer. This operation will be
      * followed by a draw_osd and a flip_page[_timed] call.
@@ -491,6 +495,7 @@ struct vo {
     struct m_config_cache *eq_opts_cache;
 
     bool want_redraw;   // redraw as soon as possible
+    bool hwdec;
 
     // current window state
     int dwidth;

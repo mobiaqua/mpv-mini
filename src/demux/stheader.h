@@ -75,6 +75,8 @@ struct mp_codec_params {
     // Usually a FourCC, exact meaning depends on codec.
     unsigned int codec_tag;
 
+    unsigned int codec_id;
+
     unsigned char *extradata;   // codec specific per-stream header
     int extradata_size;
 

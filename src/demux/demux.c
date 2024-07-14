@@ -71,7 +71,9 @@ static const demuxer_desc_t *const demuxer_list[] = {
     &demuxer_desc_cue,
     &demuxer_desc_rawaudio,
     &demuxer_desc_rawvideo,
+#if !HAVE_OMAP_DCE
     &demuxer_desc_matroska,
+#endif
     &demuxer_desc_lavf,
     &demuxer_desc_playlist,
     &demuxer_desc_null,
