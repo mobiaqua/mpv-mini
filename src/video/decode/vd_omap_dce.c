@@ -781,9 +781,11 @@ static void flush_all(struct mp_filter *vd)
                                      ctx->codecInputArgs, ctx->codecOutputArgs);
         if (codecError == DCE_EXDM_FAIL) {
             if (XDM_ISFATALERROR(ctx->codecOutputArgs->extendedError)) {
-                MP_ERR(vd, "VIDDEC3_process() FATAL Error, extendedError: %08x\n",
-                       ctx->codecOutputArgs->extendedError);
-                ctx->force_eof = true;
+                if (ctx->codecId == AV_CODEC_ID_MPEG1VIDEO || ctx->codecId == AV_CODEC_ID_MPEG2VIDEO) {
+                } else {
+                    MP_ERR(vd, "FLUSH: VIDDEC3_process() FATAL Error, extendedError: %08x\n",
+                           ctx->codecOutputArgs->extendedError);
+                }
                 break;
             }
             if (((ctx->codecOutputArgs->extendedError >> IH264VDEC_ERR_STREAM_END) & 0x1) &&
@@ -942,9 +944,18 @@ static int decode_packet(struct mp_filter *vd, struct demux_packet *mpkt, struct
             ctx->force_eof = true;
             return -1;
         } else {
-            decode_codec_error(ctx->codecId, ctx->codecOutputArgs->extendedError, error_str, sizeof(error_str));
-            MP_WARN(vd, "VIDDEC3_process() decode extendedError: %08x, %s\n",
-                    ctx->codecOutputArgs->extendedError, error_str);
+            if ((ctx->codecId == AV_CODEC_ID_H264) &&
+                ((ctx->codecOutputArgs->extendedError >> IH264VDEC_ERR_UNAVAILABLESPS) & 0x1) &&
+                ((ctx->codecOutputArgs->extendedError >> XDM_CORRUPTEDHEADER) & 0x1)) {
+            } else if ((ctx->codecId == AV_CODEC_ID_MPEG1VIDEO || ctx->codecId == AV_CODEC_ID_MPEG2VIDEO) &&
+                ((ctx->codecOutputArgs->extendedError >> IMPEG2VDEC_ERR_TRICK_MODE) & 0x1)) {
+            } else if ((ctx->codecId == AV_CODEC_ID_MPEG4) &&
+                ((ctx->codecOutputArgs->extendedError >> XDM_CORRUPTEDHEADER) & 0x1)) {
+            } else {
+                decode_codec_error(ctx->codecId, ctx->codecOutputArgs->extendedError, error_str, sizeof(error_str));
+                MP_WARN(vd, "VIDDEC3_process() decode extendedError: %08x, %s\n",
+                        ctx->codecOutputArgs->extendedError, error_str);
+            }
         }
     } else if ((codecError == DCE_EXDM_UNSUPPORTED) ||
                (codecError == DCE_EIPC_CALL_FAIL) ||
