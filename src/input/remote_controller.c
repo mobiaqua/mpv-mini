@@ -44,10 +44,12 @@ static enum remote_type remote;
 
 #define INVALID_KEY -1
 
-static const struct {
+typedef struct {
     int linux_keycode;
     int mp_keycode;
-} ps3remote_mapping[] = {
+} mapping;
+
+static const mapping ps3remote_mapping[] = {
   { KEY_ESC,           'q'               },
 //  { KEY_1,             '1'              },
 //  { KEY_2,             '2'              },
@@ -101,6 +103,17 @@ static const struct {
 //  { KEY_CONTEXT_MENU,  KEY_CONTEXT_MENU },
 };
 
+static const mapping r2remote_mapping[] = {
+  { KEY_HOMEPAGE,        'q'              },
+  { KEY_VOLUMEUP,        MP_KEY_UP        },
+  { KEY_PREVIOUSSONG,    MP_KEY_LEFT      },
+  { KEY_NEXTSONG,        MP_KEY_RIGHT     },
+  { KEY_VOLUMEDOWN,      MP_KEY_DOWN      },
+  { KEY_PLAYPAUSE,       ' '              },
+  { KEY_MUTE,            'm'              },
+  { KEY_EJECTCD,         'j'              },
+};
+
 static int lookup_button_mp_key(struct input_event *ev)
 {
     int i;
@@ -120,6 +133,13 @@ static int lookup_button_mp_key(struct input_event *ev)
         }
         case REMOTE_SATECHI_R2:
         {
+            for (i = 0; i < MP_ARRAY_SIZE(r2remote_mapping); i++)
+            {
+                if (r2remote_mapping[i].linux_keycode == ev->code)
+                {
+                    return r2remote_mapping[i].mp_keycode;
+                }
+            }
             break;
         }
     }
@@ -148,7 +168,9 @@ static int input_remote_read(struct input_event *ev)
 #define EVDEV_MAX_EVENTS 32
 
 #define USB_VENDOR_PS3REMOTE          0x054C
-#define USB_DEV_PS3REMOTE             0x0306
+#define USB_DEVICE_PS3REMOTE          0x0306
+#define USB_VENDOR_R2REMOTE           0x1915
+#define USB_DEVICE_R2REMOTE           0xEEEE
 
 static int scan_remote_controller(struct mp_input_src *src)
 {
@@ -159,6 +181,7 @@ static int scan_remote_controller(struct mp_input_src *src)
     {
         struct input_id id;
         char file[64];
+        char device_name[100];
 
         sprintf (file, "/dev/input/event%d", i);
         fd = open (file, O_RDONLY | O_NONBLOCK);
@@ -168,11 +191,23 @@ static int scan_remote_controller(struct mp_input_src *src)
         if (ioctl(fd, EVIOCGID, &id) != -1 &&
             id.bustype == BUS_BLUETOOTH)
         {
-            if (id.vendor == USB_VENDOR_PS3REMOTE && id.product == USB_DEV_PS3REMOTE)
+            if (id.vendor == USB_VENDOR_PS3REMOTE && id.product == USB_DEVICE_PS3REMOTE)
             {
                 MP_INFO (src, "Detected remote PS3 BD controller on %s\n", file);
                 remote = REMOTE_PS3_BD;
                 return fd;
+            }
+            if (id.vendor == USB_VENDOR_R2REMOTE && id.product == USB_DEVICE_R2REMOTE)
+            {
+                if (ioctl(fd, EVIOCGNAME(sizeof(device_name) - 1), &device_name) > 0)
+                {
+                    if (strncmp(device_name, "R2 Remote Keyboard", sizeof(device_name)) == 0)
+                    {
+                        MP_INFO (src, "Detected remote Satechi R2 Remote controller on %s\n", file);
+                        remote = REMOTE_SATECHI_R2;
+                        return fd;
+                    }
+                }
             }
             remote = REMOTE_UNKNOWN;
             close (fd);
