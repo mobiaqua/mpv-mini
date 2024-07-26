@@ -399,48 +399,11 @@ static bool init(struct mp_filter *vd)
         goto fail;
     }
 
-    ctx->numFrameBuffers = 3;
-
     switch (ctx->codecId) {
-    case AV_CODEC_ID_H264: {
-        int maxDpb;
-
+    case AV_CODEC_ID_H264:
         ctx->codecParams = (VIDDEC3_Params *)dce_alloc(sizeof(IH264VDEC_Params));
-        switch (ctx->codec->level) {
-            case 30:
-                maxDpb = 8100;
-                break;
-            case 31:
-                maxDpb = 18100;
-                break;
-            case 32:
-                maxDpb = 20480;
-                break;
-            case 40:
-            case 41:
-                maxDpb = 32768;
-                break;
-            case 42:
-                maxDpb = 34816;
-                break;
-            case 50:
-                maxDpb = 110400;
-                break;
-            case 51:
-            case 52:
-                maxDpb = 184320;
-                break;
-            case 0:
-                maxDpb = 184320;
-                break;
-            default:
-                MP_ERR(vd, "Not supported profile level: %d\n", ctx->codec->level);
-                goto fail;
-            }
-            dpbSizeInFrames = FFMIN(16, maxDpb / ((ctx->codec->disp_w / 16) * (ctx->codec->disp_h / 16)));
-            ctx->numFrameBuffers = IVIDEO2_MAX_IO_BUFFERS;
-            break;
-        }
+        ctx->numFrameBuffers = IVIDEO2_MAX_IO_BUFFERS;
+        break;
     case AV_CODEC_ID_MPEG4:
         ctx->codecParams = (VIDDEC3_Params *)dce_alloc(sizeof(IMPEG4VDEC_Params));
         ctx->numFrameBuffers = 4;
@@ -448,6 +411,7 @@ static bool init(struct mp_filter *vd)
     case AV_CODEC_ID_MPEG1VIDEO:
     case AV_CODEC_ID_MPEG2VIDEO:
         ctx->codecParams = (VIDDEC3_Params *)dce_alloc(sizeof(IMPEG2VDEC_Params));
+        ctx->numFrameBuffers = 3;
         break;
     case AV_CODEC_ID_WMV3:
     case AV_CODEC_ID_VC1:
@@ -464,7 +428,7 @@ static bool init(struct mp_filter *vd)
         goto fail;
     }
 
-    ctx->numFrameBuffers += ctx->vo->opts->swapchain_depth + 30;
+    ctx->numFrameBuffers += ctx->vo->opts->swapchain_depth + 30; // max 30 FPS
 
     ctx->codecParams->maxWidth = ctx->frameWidth;
     ctx->codecParams->maxHeight = ctx->frameHeight;
@@ -489,6 +453,7 @@ static bool init(struct mp_filter *vd)
         ctx->frameWidth = ALIGN2(ctx->frameWidth + (32 * 2), 7);
         ctx->frameHeight = ctx->frameHeight + 4 * 24;
         ctx->codecParams->size = sizeof(IH264VDEC_Params);
+        dpbSizeInFrames = FFMIN(16, 184320 / ((ctx->codec->disp_w / 16) * (ctx->codec->disp_h / 16)));
         ((IH264VDEC_Params *)ctx->codecParams)->dpbSizeInFrames = dpbSizeInFrames;//IH264VDEC_DPB_NUMFRAMES_AUTO;
         ((IH264VDEC_Params *)ctx->codecParams)->pConstantMemory = 0;
         ((IH264VDEC_Params *)ctx->codecParams)->bitStreamFormat = IH264VDEC_BYTE_STREAM_FORMAT;
