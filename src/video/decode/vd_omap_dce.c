@@ -862,7 +862,7 @@ static int decode_packet(struct mp_filter *vd, struct demux_packet *mpkt, struct
     if (drop == 1) {
         frameSkipMode = IVIDEO_SKIP_NONREFERENCE;   // normal framedrop
     } else if (drop == 2) {
-        frameSkipMode = IVIDEO_SKIP_I;     // hr-seek framedrop
+        frameSkipMode = IVIDEO_SKIP_NONREFERENCE;   // normal framedrop
     } else {
         frameSkipMode = IVIDEO_NO_SKIP;    // normal playback
     }
