@@ -196,8 +196,8 @@ static int reconfig(struct vo *vo, struct mp_image_params *params)
     struct priv *p = vo->priv;
     struct vo_drm_state *drm = vo->drm;
 
-    vo->dwidth = drm->fb->width;
-    vo->dheight = drm->fb->height;
+    vo->dwidth = params->w;
+    vo->dheight = params->h;
     vo_get_src_dst_rects(vo, &p->src, &p->dst, &p->osd);
 
     struct mp_imgfmt_desc fmt = mp_imgfmt_get_desc(p->imgfmt);
