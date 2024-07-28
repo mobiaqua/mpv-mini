@@ -358,13 +358,26 @@ static void queue_flip(struct vo *vo, struct drm_frame *frame)
         dst_y = 0;
         dst_w = drm->fb->width;
         dst_h = drm->fb->height;
-    }
-
-    // specific video hack
-    if (src_w == 1920 && src_h == 540) {
+    } else if (src_w == 1920 && src_h == 540) {
+        // specific video hack
         dst_y = 0;
         dst_h *= 2;
+    } else {
+        float rw = (float)(src_w) / drm->fb->width;
+        float rh = (float)(src_h) / drm->fb->height;
+        if (rw >= rh) {
+            dst_w = drm->fb->width;
+            dst_h = drm->fb->height * (rh / rw);
+            dst_x = 0;
+            dst_y = (drm->fb->height - dst_h) / 2;
+        } else {
+            dst_w = drm->fb->width * (rw / rh);
+            dst_h = drm->fb->height;
+            dst_x = (drm->fb->width - dst_w) / 2;
+            dst_y = 0;
+        }
     }
+
     drmModeSetPlane(drm->fd, atomic_ctx->drmprime_video_plane->id, drm->crtc_id, frame->fb->id, 0,
                     MP_ALIGN_DOWN(dst_x, 2),
                     MP_ALIGN_DOWN(dst_y, 2),
