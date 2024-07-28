@@ -75,6 +75,7 @@ struct drm_atomic_context {
     struct drm_object *connector;
     struct drm_object *draw_plane;
     struct drm_object *drmprime_video_plane;
+    struct drm_object *osd_plane;
 
     drmModeAtomicReq *request;
 

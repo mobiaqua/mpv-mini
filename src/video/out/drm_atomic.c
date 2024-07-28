@@ -181,6 +181,7 @@ struct drm_atomic_context *drm_atomic_create_context(struct mp_log *log, int fd,
     int layercount = -1;
     int primary_id = 0;
     int overlay_id = 0;
+    int osd_id = 0;
 
     uint64_t value;
 
@@ -259,6 +260,9 @@ struct drm_atomic_context *drm_atomic_create_context(struct mp_log *log, int fd,
                 if ((!overlay_id) && (value == DRM_PLANE_TYPE_OVERLAY))
                     overlay_id = plane_id;
 
+                else if ((!osd_id) && (value == DRM_PLANE_TYPE_OVERLAY))
+                    osd_id = plane_id;
+
                 if (layercount == draw_plane_idx) {
                     ctx->draw_plane = plane;
                     continue;
@@ -303,6 +307,12 @@ struct drm_atomic_context *drm_atomic_create_context(struct mp_log *log, int fd,
         }
     } else {
         mp_verbose(log, "Found drmprime plane with ID %d\n", ctx->drmprime_video_plane->id);
+    }
+
+    // osd plane
+    if (!ctx->osd_plane) {
+        ctx->osd_plane = drm_object_create(log, ctx->fd, osd_id, DRM_MODE_OBJECT_PLANE);
+        mp_verbose(log, "Found osd plane with ID %d\n", ctx->osd_plane->id);
     }
 
     drmModeFreePlaneResources(plane_res);
