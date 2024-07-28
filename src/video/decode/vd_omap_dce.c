@@ -709,7 +709,6 @@ static void unlockBuffer(struct mp_filter *vd, struct framebuffer *fb) {
     }
 
     if (!ctx->frameBuffers[fb->index]->free) {
-        MP_ERR(vd, "Already unlocked frame buffer at index: %d\n", fb->index);
         return;
     }
 
