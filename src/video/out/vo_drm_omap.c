@@ -261,13 +261,14 @@ static void enqueue_frame(struct vo *vo, struct framebuffer *fb)
 static void dequeue_frame(struct vo *vo)
 {
     struct priv *p = vo->priv;
+    struct drm_frame *frame = p->fb_queue[0];
 
     if (vo->hwdec) {
-        if (--p->fb_queue[0]->fb->ref_count == 0) {
-            p->fb_queue[0]->fb->locked = false;
+        if (--frame->fb->ref_count == 0) {
+            frame->fb->locked = false;
         }
     }
-    talloc_free(p->fb_queue[0]);
+    talloc_free(frame);
     MP_TARRAY_REMOVE_AT(p->fb_queue, p->fb_queue_len, 0);
 }
 
