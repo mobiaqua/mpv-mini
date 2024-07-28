@@ -428,7 +428,7 @@ static bool init(struct mp_filter *vd)
         goto fail;
     }
 
-    ctx->numFrameBuffers += ctx->vo->opts->swapchain_depth + 30; // max 30 FPS
+    ctx->numFrameBuffers += ctx->vo->opts->swapchain_depth + 25;
 
     ctx->codecParams->maxWidth = ctx->frameWidth;
     ctx->codecParams->maxHeight = ctx->frameHeight;
