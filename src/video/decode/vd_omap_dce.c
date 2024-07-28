@@ -968,6 +968,10 @@ static int decode_packet(struct mp_filter *vd, struct demux_packet *mpkt, struct
     mpi->y1 = r->bottomRight.y;
     mpi->priv = (void *)fb;
     mpi->hw_surf = true;
+    mpi->planes[0] = fb->map;
+    mpi->stride[0] = fb->stride;
+    mpi->planes[1] = fb->map + fb->width * fb->height;
+    mpi->stride[1] = fb->stride;
 
     int found_pts_index = -1;
     double min_pts = -MP_NOPTS_VALUE;
