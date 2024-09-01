@@ -33,6 +33,7 @@
 #include "input/keycodes.h"
 
 static int thread_exit_request;
+static int thread_exited;
 
 enum remote_type {
     REMOTE_UNKNOWN = 0,
@@ -184,12 +185,15 @@ static void request_cancel(struct mp_input_src *src)
 {
     MP_VERBOSE(src, "exiting...\n");
     thread_exit_request = 1;
+    while (!thread_exited) { usleep(10000); }
+    thread_exited = 0;
 }
 
 static void uninit(struct mp_input_src *src)
 {
     MP_VERBOSE(src, "exited.\n");
     thread_exit_request = 0;
+    thread_exited = 0;
 }
 
 static void read_remote_controller_thread(struct mp_input_src *src, void *param)
@@ -265,14 +269,27 @@ static void read_remote_controller_thread(struct mp_input_src *src, void *param)
 exit:
 
     if (inotify_wd != -1)
+    {
         inotify_rm_watch(inotify_fd, inotify_wd);
+        inotify_wd = -1;
+    }
     if (inotify_fd != -1)
+    {
         close(inotify_fd);
+        inotify_fd = -1;
+    }
     if (input_fd != -1)
+    {
         close(input_fd);
+        input_fd = -1;
+    }
+    thread_exited = 1;
 }
 
 void mp_input_remote_controller_add(struct input_ctx *ictx)
 {
+    thread_exit_request = 0;
+    thread_exited = 0;
+
     mp_input_add_thread_src(ictx, NULL, read_remote_controller_thread);
 }
