@@ -438,7 +438,7 @@ cont:
     mp_subfilter_continue(&p->sub);
 }
 
-static void process(struct mp_filter *f)
+static void autoconvert_process(struct mp_filter *f)
 {
     struct priv *p = f->priv;
 
@@ -469,7 +469,7 @@ void mp_autoconvert_format_change_continue(struct mp_autoconvert *c)
     }
 }
 
-static bool command(struct mp_filter *f, struct mp_filter_command *cmd)
+static bool autoconvert_command(struct mp_filter *f, struct mp_filter_command *cmd)
 {
     struct priv *p = f->priv;
 
@@ -490,7 +490,7 @@ static bool command(struct mp_filter *f, struct mp_filter_command *cmd)
     return false;
 }
 
-static void reset(struct mp_filter *f)
+static void autoconvert_reset(struct mp_filter *f)
 {
     struct priv *p = f->priv;
 
@@ -500,7 +500,7 @@ static void reset(struct mp_filter *f)
     p->format_change_blocked = false;
 }
 
-static void destroy(struct mp_filter *f)
+static void autoconvert_destroy(struct mp_filter *f)
 {
     struct priv *p = f->priv;
 
@@ -511,10 +511,10 @@ static void destroy(struct mp_filter *f)
 static const struct mp_filter_info autoconvert_filter = {
     .name = "autoconvert",
     .priv_size = sizeof(struct priv),
-    .process = process,
-    .command = command,
-    .reset = reset,
-    .destroy = destroy,
+    .process = autoconvert_process,
+    .command = autoconvert_command,
+    .reset = autoconvert_reset,
+    .destroy = autoconvert_destroy,
 };
 
 struct mp_autoconvert *mp_autoconvert_create(struct mp_filter *parent)

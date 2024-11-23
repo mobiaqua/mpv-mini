@@ -20,9 +20,9 @@ struct priv {
 };
 
 static bool init_scaletempo2(struct mp_filter *f);
-static void reset(struct mp_filter *f);
+static void af_scaletempo2_reset(struct mp_filter *f);
 
-static void process(struct mp_filter *f)
+static void af_scaletempo2_process(struct mp_filter *f)
 {
     struct priv *p = f->priv;
 
@@ -146,7 +146,7 @@ static bool init_scaletempo2(struct mp_filter *f)
     return true;
 }
 
-static bool command(struct mp_filter *f, struct mp_filter_command *cmd)
+static bool af_scaletempo2_command(struct mp_filter *f, struct mp_filter_command *cmd)
 {
     struct priv *p = f->priv;
 
@@ -159,7 +159,7 @@ static bool command(struct mp_filter *f, struct mp_filter_command *cmd)
     return false;
 }
 
-static void reset(struct mp_filter *f)
+static void af_scaletempo2_reset(struct mp_filter *f)
 {
     struct priv *p = f->priv;
     mp_scaletempo2_reset(&p->data);
@@ -168,7 +168,7 @@ static void reset(struct mp_filter *f)
     TA_FREEP(&p->pending);
 }
 
-static void destroy(struct mp_filter *f)
+static void af_scaletempo2_destroy(struct mp_filter *f)
 {
     struct priv *p = f->priv;
     mp_scaletempo2_destroy(&p->data);
@@ -178,10 +178,10 @@ static void destroy(struct mp_filter *f)
 static const struct mp_filter_info af_scaletempo2_filter = {
     .name = "scaletempo2",
     .priv_size = sizeof(struct priv),
-    .process = process,
-    .command = command,
-    .reset = reset,
-    .destroy = destroy,
+    .process = af_scaletempo2_process,
+    .command = af_scaletempo2_command,
+    .reset = af_scaletempo2_reset,
+    .destroy = af_scaletempo2_destroy,
 };
 
 static struct mp_filter *af_scaletempo2_create(

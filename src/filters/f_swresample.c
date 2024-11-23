@@ -311,7 +311,7 @@ error:
     return false;
 }
 
-static void reset(struct mp_filter *f)
+static void swresample_reset(struct mp_filter *f)
 {
     struct priv *p = f->priv;
 
@@ -455,7 +455,7 @@ error:
     return MP_NO_FRAME;
 }
 
-static void process(struct mp_filter *f)
+static void swresample_process(struct mp_filter *f)
 {
     struct priv *p = f->priv;
 
@@ -616,7 +616,7 @@ double mp_swresample_get_delay(struct mp_swresample *s)
     return get_delay(p);
 }
 
-static bool command(struct mp_filter *f, struct mp_filter_command *cmd)
+static bool swresample_command(struct mp_filter *f, struct mp_filter_command *cmd)
 {
     struct priv *p = f->priv;
 
@@ -628,7 +628,7 @@ static bool command(struct mp_filter *f, struct mp_filter_command *cmd)
     return false;
 }
 
-static void destroy(struct mp_filter *f)
+static void swresample_destroy(struct mp_filter *f)
 {
     struct priv *p = f->priv;
 
@@ -639,10 +639,10 @@ static void destroy(struct mp_filter *f)
 static const struct mp_filter_info swresample_filter = {
     .name = "swresample",
     .priv_size = sizeof(struct priv),
-    .process = process,
-    .command = command,
-    .reset = reset,
-    .destroy = destroy,
+    .process = swresample_process,
+    .command = swresample_command,
+    .reset = swresample_reset,
+    .destroy = swresample_destroy,
 };
 
 struct mp_swresample *mp_swresample_create(struct mp_filter *parent,

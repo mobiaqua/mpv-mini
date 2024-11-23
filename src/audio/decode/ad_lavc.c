@@ -151,7 +151,7 @@ static bool init(struct mp_filter *da, struct mp_codec_params *codec,
     return true;
 }
 
-static void destroy(struct mp_filter *da)
+static void ad_lavc_destroy(struct mp_filter *da)
 {
     struct priv *ctx = da->priv;
 
@@ -160,7 +160,7 @@ static void destroy(struct mp_filter *da)
     mp_free_av_packet(&ctx->avpkt);
 }
 
-static void reset(struct mp_filter *da)
+static void ad_lavc_reset(struct mp_filter *da)
 {
     struct priv *ctx = da->priv;
 
@@ -271,7 +271,7 @@ static int receive_frame(struct mp_filter *da, struct mp_frame *out)
     return ret;
 }
 
-static void process(struct mp_filter *ad)
+static void ad_lavc_process(struct mp_filter *ad)
 {
     struct priv *priv = ad->priv;
 
@@ -281,9 +281,9 @@ static void process(struct mp_filter *ad)
 static const struct mp_filter_info ad_lavc_filter = {
     .name = "ad_lavc",
     .priv_size = sizeof(struct priv),
-    .process = process,
-    .reset = reset,
-    .destroy = destroy,
+    .process = ad_lavc_process,
+    .reset = ad_lavc_reset,
+    .destroy = ad_lavc_destroy,
 };
 
 static struct mp_decoder *create(struct mp_filter *parent,
