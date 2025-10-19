@@ -2,4 +2,4 @@
 
 . _env.sh
 
-make -j8 $1
+make -j16 $1

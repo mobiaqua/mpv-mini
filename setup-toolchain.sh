@@ -17,8 +17,8 @@ cd ${OE_BASE}/build-${DISTRO}-${TARGET} && \
 		echo "Copying..."
 		echo
 		rm -rf sysroot-native sysroot-arm sysroot-x86
-		cp -R ${OE_BASE}/build-${DISTRO}-${TARGET}/tmp-glibc/work/*-linux-gnueabi/external-sdk/*/recipe-sysroot-native sysroot-native/
-		cp -R ${OE_BASE}/build-${DISTRO}-${TARGET}/tmp-glibc/work/*-linux-gnueabi/external-sdk/*/recipe-sysroot sysroot-x86/
+		cp -R ${OE_BASE}/build-${DISTRO}-${TARGET}/tmp-glibc/work/x86-64-v3-mobiaqua-linux/external-sdk/*/recipe-sysroot-native sysroot-native/
+		cp -R ${OE_BASE}/build-${DISTRO}-${TARGET}/tmp-glibc/work/x86-64-v3-mobiaqua-linux/external-sdk/*/recipe-sysroot sysroot-x86/
 	} && \
 	${OE_BASE}/bitbake/bin/bitbake external-sdk -cclean && {
 		echo
