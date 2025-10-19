@@ -689,6 +689,10 @@ static bool setup_mode(struct vo_drm_state *drm)
         break;
     case DRM_MODE_SPEC_BY_NUMBERS:
         if (!setup_mode_by_numbers(drm, parsed.width, parsed.height, parsed.refresh)) {
+            // no TV Hz modes on HD, try 4K
+            if (setup_mode_by_numbers(drm, 3840, 2160, parsed.refresh)) {
+                break;
+            }
             // no TV Hz modes, try use monitor 60hz
             if (setup_mode_by_numbers(drm, parsed.width, parsed.height, 60.00)) {
                 break;
