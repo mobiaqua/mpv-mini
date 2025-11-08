@@ -146,6 +146,7 @@ static int scan_remote_controller(struct mp_input_src *src)
         struct input_id id;
         char file[64];
         char device_name[100];
+        char device_id[100];
 
         sprintf (file, "/dev/input/event%d", i);
         fd = open (file, O_RDONLY | O_NONBLOCK);
@@ -157,6 +158,13 @@ static int scan_remote_controller(struct mp_input_src *src)
         {
             if (id.vendor == USB_VENDOR_PS3REMOTE && id.product == USB_DEVICE_PS3REMOTE)
             {
+                if (src->remote_mac && ioctl(fd, EVIOCGUNIQ(sizeof(device_id) - 1), &device_id) > 0)
+                {
+                    if (strncasecmp(device_id, src->remote_mac, sizeof(device_id)) != 0)
+                    {
+                        continue;
+                    }
+                }
                 MP_INFO (src, "Detected remote PS3 BD controller on %s\n", file);
                 remote = REMOTE_PS3_BD;
                 return fd;

@@ -42,6 +42,8 @@ struct mp_input_src {
 
     // For free use by the implementer.
     void *priv;
+
+    char *remote_mac;
 };
 
 enum mp_input_section_flags {

@@ -176,6 +176,7 @@ struct input_opts {
     bool vo_key_input;
     bool test;
     bool allow_win_drag;
+    char *remote_mac;
 };
 
 const struct m_sub_options input_config = {
@@ -197,6 +198,7 @@ const struct m_sub_options input_config = {
         {"input-media-keys", OPT_BOOL(use_media_keys)},
         {"window-dragging", OPT_BOOL(allow_win_drag)},
         {"input-x11-keyboard", OPT_REPLACED("input-vo-keyboard")},
+        {"input-remote-mac", OPT_STRING(remote_mac)},
         {0}
     },
     .size = sizeof(struct input_opts),
@@ -1617,6 +1619,8 @@ int mp_input_add_thread_src(struct input_ctx *ictx, void *ctx,
     struct mp_input_src *src = mp_input_add_src(ictx);
     if (!src)
         return -1;
+
+    src->remote_mac = ictx->opts->remote_mac;
 
     void *args[] = {src, loop_fn, ctx};
     if (pthread_create(&src->in->thread, NULL, input_src_thread, args)) {
