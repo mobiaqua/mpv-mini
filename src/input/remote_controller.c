@@ -65,6 +65,8 @@ static const mapping ps3remote_mapping[] = {
   { KEY_OPTION,          'j'              },
   { KEY_NEXT,            MP_KEY_PGUP      },
   { KEY_PREVIOUS,        MP_KEY_PGDOWN    },
+  { KEY_MENU,            'l'              },
+  { KEY_INFO,            'L'              },
 };
 
 static const mapping r2remote_mapping[] = {
